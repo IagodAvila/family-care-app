@@ -2,6 +2,10 @@
 
 Aplicação web para organizar informações essenciais de saúde dos familiares em um só lugar. O FamilyCare facilita a consulta de dados importantes no dia a dia e em situações de emergência.
 
+## Acesse a aplicação
+
+Teste a versão publicada em: [family-care-app.iagoddc.workers.dev](https://family-care-app.iagoddc.workers.dev)
+
 ## Funcionalidades
 
 - Cadastro de familiares com nome, parentesco e data de nascimento
