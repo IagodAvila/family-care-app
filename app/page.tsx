@@ -88,10 +88,13 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState(starterFamily[0].id);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showMedicationForm, setShowMedicationForm] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- This effect hydrates React state from browser storage. */
   useEffect(() => {
     const saved = window.localStorage.getItem("familycare-family");
     if (saved) {
@@ -107,22 +110,65 @@ export default function Home() {
     }
     setHydrated(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (hydrated) window.localStorage.setItem("familycare-family", JSON.stringify(family));
   }, [family, hydrated]);
 
   const selected = family.find((person) => person.id === selectedId) ?? family[0];
+  const editingRelative = family.find((person) => person.id === editingId);
   const filtered = useMemo(
     () => family.filter((person) => `${person.name} ${person.relation}`.toLowerCase().includes(query.toLowerCase())),
     [family, query],
   );
 
-  function addRelative(event: FormEvent<HTMLFormElement>) {
+  function openAddRelative() {
+    setEditingId(null);
+    setShowForm(true);
+  }
+
+  function openEditRelative() {
+    if (!selected) return;
+    setEditingId(selected.id);
+    setShowForm(true);
+  }
+
+  function deleteRelative() {
+    if (!selected) return;
+    const firstConfirmation = window.confirm(`Tem certeza de que deseja apagar ${selected.name}?`);
+    if (!firstConfirmation) return;
+
+    const finalConfirmation = window.confirm(`Confirmação final: todos os dados de ${selected.name}, incluindo medicamentos, serão excluídos definitivamente. Deseja continuar?`);
+    if (!finalConfirmation) return;
+
+    const remainingFamily = family.filter((person) => person.id !== selected.id);
+    setFamily(remainingFamily);
+    setSelectedId(remainingFamily[0]?.id ?? "");
+  }
+
+  function saveRelative(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const conditions = String(data.get("conditions") || "").split(",").map((item) => item.trim()).filter(Boolean);
     const allergies = String(data.get("allergies") || "").split(",").map((item) => item.trim()).filter(Boolean);
+
+    if (editingId) {
+      setFamily((current) => current.map((person) => person.id === editingId ? {
+        ...person,
+        name: String(data.get("name")),
+        relation: String(data.get("relation")),
+        birthDate: String(data.get("birthDate")),
+        bloodType: String(data.get("bloodType")),
+        conditions,
+        allergies,
+        notes: String(data.get("notes") || ""),
+      } : person));
+      setShowForm(false);
+      setEditingId(null);
+      return;
+    }
+
     const medicationName = String(data.get("medication") || "").trim();
     const person: Relative = {
       id: crypto.randomUUID(),
@@ -143,7 +189,29 @@ export default function Home() {
     setShowForm(false);
   }
 
-  if (!selected) return null;
+  function addMedication(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const data = new FormData(event.currentTarget);
+    const medication: Medication = {
+      name: String(data.get("name")).trim(),
+      dosage: String(data.get("dosage")).trim(),
+      schedule: String(data.get("schedule")).trim(),
+    };
+    setFamily((current) => current.map((person) => person.id === selected.id
+      ? { ...person, medications: [...person.medications, medication] }
+      : person));
+    setShowMedicationForm(false);
+  }
+
+  function removeMedication(index: number) {
+    if (!selected) return;
+    const medication = selected.medications[index];
+    if (!window.confirm(`Remover ${medication.name} dos medicamentos de ${selected.name}?`)) return;
+    setFamily((current) => current.map((person) => person.id === selected.id
+      ? { ...person, medications: person.medications.filter((_, medicationIndex) => medicationIndex !== index) }
+      : person));
+  }
 
   return (
     <main className={emergencyMode ? "app emergency-active" : "app"}>
@@ -156,7 +224,7 @@ export default function Home() {
           <a className="active" href="#familiares">Familiares</a>
           <button type="button" onClick={() => setShowPrivacy(true)}>Privacidade</button>
         </nav>
-        <button className="add-button" type="button" onClick={() => setShowForm(true)}>
+        <button className="add-button" type="button" onClick={openAddRelative}>
           <span aria-hidden="true">＋</span> Adicionar familiar
         </button>
       </header>
@@ -186,7 +254,7 @@ export default function Home() {
           <div className="family-list">
             {filtered.map((person) => (
               <button
-                className={person.id === selected.id ? "person-card selected" : "person-card"}
+                className={person.id === selected?.id ? "person-card selected" : "person-card"}
                 key={person.id}
                 type="button"
                 onClick={() => setSelectedId(person.id)}
@@ -200,13 +268,17 @@ export default function Home() {
           </div>
         </aside>
 
-        <article className="medical-record">
+        {selected ? <article className="medical-record">
           <div className="record-header">
             <div className="identity">
               <span className="avatar avatar-large" style={{ backgroundColor: selected.color }}>{initials(selected.name)}</span>
               <div><span className="relation-label">{selected.relation}</span><h2>{selected.name}</h2><p>{formatDate(selected.birthDate)} · {ageFrom(selected.birthDate)} anos</p></div>
             </div>
-            <div className="updated"><span aria-hidden="true">✓</span> Dados salvos neste dispositivo</div>
+            <div className="record-actions">
+              <div className="updated"><span aria-hidden="true">✓</span> Dados salvos neste dispositivo</div>
+              <button className="edit-button" type="button" onClick={openEditRelative}><span aria-hidden="true">✎</span> Editar familiar</button>
+              <button className="delete-button" type="button" onClick={deleteRelative}><span aria-hidden="true">⌫</span> Apagar familiar</button>
+            </div>
           </div>
 
           <div className="vitals-grid">
@@ -225,14 +297,21 @@ export default function Home() {
           </div>
 
           <section className="medications-section">
-            <div className="section-heading"><div><p className="eyebrow">Uso contínuo</p><h3>Medicamentos</h3></div><span>{selected.medications.length} {selected.medications.length === 1 ? "medicamento" : "medicamentos"}</span></div>
+            <div className="section-heading">
+              <div><p className="eyebrow">Uso contínuo</p><h3>Medicamentos</h3></div>
+              <div className="medication-heading-actions">
+                <span>{selected.medications.length} {selected.medications.length === 1 ? "medicamento" : "medicamentos"}</span>
+                <button type="button" onClick={() => setShowMedicationForm(true)}><span aria-hidden="true">＋</span> Adicionar</button>
+              </div>
+            </div>
             {selected.medications.length ? (
               <div className="medication-list">
-                {selected.medications.map((medication) => (
-                  <div className="medication-row" key={`${medication.name}-${medication.dosage}`}>
+                {selected.medications.map((medication, index) => (
+                  <div className="medication-row" key={`${medication.name}-${medication.dosage}-${index}`}>
                     <span className="pill-icon" aria-hidden="true">◐</span>
                     <div><strong>{medication.name}</strong><small>{medication.schedule}</small></div>
                     <b>{medication.dosage}</b>
+                    <button className="remove-medication" type="button" aria-label={`Remover ${medication.name}`} title={`Remover ${medication.name}`} onClick={() => removeMedication(index)}>×</button>
                   </div>
                 ))}
               </div>
@@ -240,27 +319,47 @@ export default function Home() {
           </section>
 
           {selected.notes && <section className="notes"><strong>Observação importante</strong><p>{selected.notes}</p></section>}
-        </article>
+        </article> : (
+          <article className="medical-record empty-family-record">
+            <div><span aria-hidden="true">＋</span><h2>Nenhum familiar cadastrado</h2><p>Adicione uma pessoa para começar a organizar os dados de saúde.</p><button className="submit-button" type="button" onClick={openAddRelative}>Adicionar familiar</button></div>
+          </article>
+        )}
       </section>
 
       <footer><span>familycare</span><p>Seus dados permanecem apenas neste dispositivo nesta versão.</p><button type="button" onClick={() => setShowPrivacy(true)}>Como protegemos seus dados</button></footer>
 
       {showForm && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowForm(false)}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => { setShowForm(false); setEditingId(null); }}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="form-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="modal-header"><div><p className="eyebrow">Nova pessoa</p><h2 id="form-title">Adicionar familiar</h2></div><button type="button" aria-label="Fechar" onClick={() => setShowForm(false)}>×</button></div>
-            <form onSubmit={addRelative}>
+            <div className="modal-header"><div><p className="eyebrow">{editingId ? "Atualizar cadastro" : "Nova pessoa"}</p><h2 id="form-title">{editingId ? "Editar familiar" : "Adicionar familiar"}</h2></div><button type="button" aria-label="Fechar" onClick={() => { setShowForm(false); setEditingId(null); }}>×</button></div>
+            <form onSubmit={saveRelative}>
               <div className="form-grid">
-                <label>Nome completo<input name="name" required placeholder="Ex.: Carlos Almeida" /></label>
-                <label>Parentesco<input name="relation" required placeholder="Ex.: Avô" /></label>
-                <label>Data de nascimento<input name="birthDate" type="date" required /></label>
-                <label>Tipo sanguíneo<select name="bloodType" required defaultValue=""><option value="" disabled>Selecione</option>{["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Não sei"].map((type) => <option key={type}>{type}</option>)}</select></label>
-                <label className="full">Comorbidades, separadas por vírgula<input name="conditions" placeholder="Hipertensão, diabetes" /></label>
-                <label className="full">Alergias, separadas por vírgula<input name="allergies" placeholder="Dipirona, amoxicilina" /></label>
+                <label>Nome completo<input name="name" required placeholder="Ex.: Carlos Almeida" defaultValue={editingRelative?.name ?? ""} /></label>
+                <label>Parentesco<input name="relation" required placeholder="Ex.: Avô" defaultValue={editingRelative?.relation ?? ""} /></label>
+                <label>Data de nascimento<input name="birthDate" type="date" required defaultValue={editingRelative?.birthDate ?? ""} /></label>
+                <label>Tipo sanguíneo<select name="bloodType" required defaultValue={editingRelative?.bloodType ?? ""}><option value="" disabled>Selecione</option>{["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Não sei"].map((type) => <option key={type}>{type}</option>)}</select></label>
+                <label className="full">Comorbidades, separadas por vírgula<input name="conditions" placeholder="Hipertensão, diabetes" defaultValue={editingRelative?.conditions.join(", ") ?? ""} /></label>
+                <label className="full">Alergias, separadas por vírgula<input name="allergies" placeholder="Dipirona, amoxicilina" defaultValue={editingRelative?.allergies.join(", ") ?? ""} /></label>
               </div>
-              <fieldset><legend>Primeiro medicamento, opcional</legend><div className="form-grid three"><label>Nome<input name="medication" placeholder="Losartana" /></label><label>Dose<input name="dosage" placeholder="50 mg" /></label><label>Horário<input name="schedule" placeholder="Pela manhã" /></label></div></fieldset>
-              <label>Observações<textarea name="notes" placeholder="Histórico clínico ou orientação importante" /></label>
-              <div className="form-actions"><button type="button" onClick={() => setShowForm(false)}>Cancelar</button><button className="submit-button" type="submit">Salvar familiar</button></div>
+              {!editingId && <fieldset><legend>Primeiro medicamento, opcional</legend><div className="form-grid three"><label>Nome<input name="medication" placeholder="Losartana" /></label><label>Dose<input name="dosage" placeholder="50 mg" /></label><label>Horário<input name="schedule" placeholder="Pela manhã" /></label></div></fieldset>}
+              <label className={editingId ? "edit-notes" : ""}>Observações<textarea name="notes" placeholder="Histórico clínico ou orientação importante" defaultValue={editingRelative?.notes ?? ""} /></label>
+              <div className="form-actions"><button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</button><button className="submit-button" type="submit">{editingId ? "Salvar alterações" : "Salvar familiar"}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {showMedicationForm && selected && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowMedicationForm(false)}>
+          <section className="modal medication-modal" role="dialog" aria-modal="true" aria-labelledby="medication-form-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-header"><div><p className="eyebrow">{selected.name}</p><h2 id="medication-form-title">Adicionar medicamento</h2></div><button type="button" aria-label="Fechar" onClick={() => setShowMedicationForm(false)}>×</button></div>
+            <form onSubmit={addMedication}>
+              <div className="form-grid three">
+                <label>Nome<input name="name" required autoFocus placeholder="Ex.: Losartana" /></label>
+                <label>Dose<input name="dosage" required placeholder="Ex.: 50 mg" /></label>
+                <label>Horário e frequência<input name="schedule" required placeholder="Ex.: Pela manhã" /></label>
+              </div>
+              <div className="form-actions"><button type="button" onClick={() => setShowMedicationForm(false)}>Cancelar</button><button className="submit-button" type="submit">Adicionar medicamento</button></div>
             </form>
           </section>
         </div>
