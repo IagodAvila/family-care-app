@@ -36,9 +36,10 @@ test("server-renders the FamilyCare dashboard", async () => {
   assert.match(html, /<main class="app">/i);
   assert.match(html, /Quem você ama, sempre bem cuidado\./i);
   assert.match(html, /Modo emergência/i);
-  assert.match(html, /Antônio Almeida/i);
-  assert.match(html, /Hipertensão/i);
-  assert.match(html, /Losartana/i);
+  assert.match(html, /Boas-vindas ao FamilyCare/i);
+  assert.match(html, /Comece sua rede de cuidados/i);
+  assert.match(html, /Cadastrar primeiro familiar/i);
+  assert.doesNotMatch(html, /Antônio Almeida|Lúcia Almeida|Marina Almeida/i);
   assert.match(html, /aria-label="Navegação principal"/i);
 });
 

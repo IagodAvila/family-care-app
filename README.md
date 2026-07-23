@@ -62,6 +62,7 @@ npm run dev      # Inicia o servidor de desenvolvimento
 npm run build    # Gera a versão de produção
 npm run start    # Inicia a versão de produção
 npm run lint     # Verifica a qualidade do código
+npm test         # Gera o build e executa os testes automatizados
 ```
 
 ## Armazenamento e privacidade

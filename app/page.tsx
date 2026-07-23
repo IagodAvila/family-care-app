@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createRelative, deleteRelative as removeRelative, updateRelative } from "./family-data.mjs";
 
 type Medication = { name: string; dosage: string; schedule: string };
 type Relative = {
@@ -15,51 +16,6 @@ type Relative = {
   notes: string;
   color: string;
 };
-
-const starterFamily: Relative[] = [
-  {
-    id: "antonio",
-    name: "Antônio Almeida",
-    relation: "Pai",
-    birthDate: "1958-03-12",
-    bloodType: "A+",
-    conditions: ["Hipertensão", "Diabetes tipo 2"],
-    allergies: ["Dipirona"],
-    medications: [
-      { name: "Losartana", dosage: "50 mg", schedule: "1x ao dia, pela manhã" },
-      { name: "Metformina", dosage: "850 mg", schedule: "Após almoço e jantar" },
-      { name: "AAS", dosage: "100 mg", schedule: "1x ao dia" },
-    ],
-    notes: "Histórico de AVC isquêmico em 2024.",
-    color: "#277f7b",
-  },
-  {
-    id: "lucia",
-    name: "Lúcia Almeida",
-    relation: "Mãe",
-    birthDate: "1962-08-24",
-    bloodType: "O+",
-    conditions: ["Hipotireoidismo"],
-    allergies: [],
-    medications: [{ name: "Levotiroxina", dosage: "50 mcg", schedule: "Em jejum, pela manhã" }],
-    notes: "",
-    color: "#8a6fbc",
-  },
-  {
-    id: "marina",
-    name: "Marina Almeida",
-    relation: "Irmã",
-    birthDate: "1991-11-07",
-    bloodType: "A-",
-    conditions: [],
-    allergies: ["Amoxicilina"],
-    medications: [],
-    notes: "",
-    color: "#d7855e",
-  },
-];
-
-const colors = ["#277f7b", "#8a6fbc", "#d7855e", "#3b6aa0", "#a26371"];
 
 function initials(name: string) {
   return name
@@ -84,8 +40,8 @@ function formatDate(date: string) {
 }
 
 export default function Home() {
-  const [family, setFamily] = useState<Relative[]>(starterFamily);
-  const [selectedId, setSelectedId] = useState(starterFamily[0].id);
+  const [family, setFamily] = useState<Relative[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -100,10 +56,8 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Relative[];
-        if (parsed.length) {
-          setFamily(parsed);
-          setSelectedId(parsed[0].id);
-        }
+        setFamily(parsed);
+        setSelectedId(parsed[0]?.id ?? "");
       } catch {
         window.localStorage.removeItem("familycare-family");
       }
@@ -142,7 +96,7 @@ export default function Home() {
     const finalConfirmation = window.confirm(`Confirmação final: todos os dados de ${selected.name}, incluindo medicamentos, serão excluídos definitivamente. Deseja continuar?`);
     if (!finalConfirmation) return;
 
-    const remainingFamily = family.filter((person) => person.id !== selected.id);
+    const remainingFamily = removeRelative(family, selected.id) as Relative[];
     setFamily(remainingFamily);
     setSelectedId(remainingFamily[0]?.id ?? "");
   }
@@ -150,40 +104,14 @@ export default function Home() {
   function saveRelative(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const conditions = String(data.get("conditions") || "").split(",").map((item) => item.trim()).filter(Boolean);
-    const allergies = String(data.get("allergies") || "").split(",").map((item) => item.trim()).filter(Boolean);
-
     if (editingId) {
-      setFamily((current) => current.map((person) => person.id === editingId ? {
-        ...person,
-        name: String(data.get("name")),
-        relation: String(data.get("relation")),
-        birthDate: String(data.get("birthDate")),
-        bloodType: String(data.get("bloodType")),
-        conditions,
-        allergies,
-        notes: String(data.get("notes") || ""),
-      } : person));
+      setFamily((current) => updateRelative(current, editingId, data) as Relative[]);
       setShowForm(false);
       setEditingId(null);
       return;
     }
 
-    const medicationName = String(data.get("medication") || "").trim();
-    const person: Relative = {
-      id: crypto.randomUUID(),
-      name: String(data.get("name")),
-      relation: String(data.get("relation")),
-      birthDate: String(data.get("birthDate")),
-      bloodType: String(data.get("bloodType")),
-      conditions,
-      allergies,
-      medications: medicationName
-        ? [{ name: medicationName, dosage: String(data.get("dosage") || "Não informada"), schedule: String(data.get("schedule") || "Não informado") }]
-        : [],
-      notes: String(data.get("notes") || ""),
-      color: colors[family.length % colors.length],
-    };
+    const person = createRelative(data, family.length) as Relative;
     setFamily((current) => [...current, person]);
     setSelectedId(person.id);
     setShowForm(false);
@@ -321,7 +249,7 @@ export default function Home() {
           {selected.notes && <section className="notes"><strong>Observação importante</strong><p>{selected.notes}</p></section>}
         </article> : (
           <article className="medical-record empty-family-record">
-            <div><span aria-hidden="true">＋</span><h2>Nenhum familiar cadastrado</h2><p>Adicione uma pessoa para começar a organizar os dados de saúde.</p><button className="submit-button" type="button" onClick={openAddRelative}>Adicionar familiar</button></div>
+            <div><span aria-hidden="true">＋</span><p className="eyebrow">Boas-vindas ao FamilyCare</p><h2>Comece sua rede de cuidados</h2><p>Cadastre seu primeiro familiar para manter informações importantes de saúde organizadas e sempre por perto.</p><button className="submit-button" type="button" onClick={openAddRelative}>Cadastrar primeiro familiar</button></div>
           </article>
         )}
       </section>
