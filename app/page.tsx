@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createRelative, deleteRelative as removeRelative, updateRelative } from "./family-data.mjs";
+import { createMedication, createRelative, deleteRelative as removeRelative, removeLegacyStarterFamily, updateRelative } from "./family-data.mjs";
 
-type Medication = { name: string; dosage: string; schedule: string };
+type Medication = { name: string; dosage: string; frequency?: number; schedules?: string[]; schedule?: string };
 type Relative = {
   id: string;
   name: string;
@@ -39,6 +39,33 @@ function formatDate(date: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(`${date}T12:00:00`));
 }
 
+function medicationTiming(medication: Medication) {
+  const schedules = medication.schedules?.length ? medication.schedules : medication.schedule ? [medication.schedule] : [];
+  if (!medication.frequency) return schedules.join(" e ");
+  const frequency = medication.frequency === 1 ? "1 vez ao dia" : `${medication.frequency} vezes ao dia`;
+  return `${frequency} · ${schedules.join(" e ")}`;
+}
+
+const medicationPeriods = ["Manhã", "Tarde", "Noite"];
+
+function MedicationTimingFields() {
+  const [frequency, setFrequency] = useState(1);
+  const [schedules, setSchedules] = useState(medicationPeriods);
+
+  function changeSchedule(index: number, schedule: string) {
+    setSchedules((current) => current.map((item, itemIndex) => itemIndex === index ? schedule : item));
+  }
+
+  return (
+    <>
+      <label>Vezes ao dia<select name="frequency" required value={frequency} onChange={(event) => setFrequency(Number(event.target.value))}><option value="1">1 vez</option><option value="2">2 vezes</option><option value="3">3 vezes</option></select></label>
+      {Array.from({ length: frequency }, (_, index) => (
+        <label key={index}>Horário{frequency > 1 ? ` ${index + 1}` : ""}<select name="schedules" required value={schedules[index]} onChange={(event) => changeSchedule(index, event.target.value)}>{medicationPeriods.map((period) => <option key={period} disabled={schedules.slice(0, frequency).some((selectedPeriod, selectedIndex) => selectedIndex !== index && selectedPeriod === period)}>{period}</option>)}</select></label>
+      ))}
+    </>
+  );
+}
+
 export default function Home() {
   const [family, setFamily] = useState<Relative[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -56,8 +83,9 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Relative[];
-        setFamily(parsed);
-        setSelectedId(parsed[0]?.id ?? "");
+        const savedFamily = removeLegacyStarterFamily(parsed) as Relative[];
+        setFamily(savedFamily);
+        setSelectedId(savedFamily[0]?.id ?? "");
       } catch {
         window.localStorage.removeItem("familycare-family");
       }
@@ -121,11 +149,7 @@ export default function Home() {
     event.preventDefault();
     if (!selected) return;
     const data = new FormData(event.currentTarget);
-    const medication: Medication = {
-      name: String(data.get("name")).trim(),
-      dosage: String(data.get("dosage")).trim(),
-      schedule: String(data.get("schedule")).trim(),
-    };
+    const medication = createMedication(data) as Medication;
     setFamily((current) => current.map((person) => person.id === selected.id
       ? { ...person, medications: [...person.medications, medication] }
       : person));
@@ -237,7 +261,7 @@ export default function Home() {
                 {selected.medications.map((medication, index) => (
                   <div className="medication-row" key={`${medication.name}-${medication.dosage}-${index}`}>
                     <span className="pill-icon" aria-hidden="true">◐</span>
-                    <div><strong>{medication.name}</strong><small>{medication.schedule}</small></div>
+                    <div><strong>{medication.name}</strong><small>{medicationTiming(medication)}</small></div>
                     <b>{medication.dosage}</b>
                     <button className="remove-medication" type="button" aria-label={`Remover ${medication.name}`} title={`Remover ${medication.name}`} onClick={() => removeMedication(index)}>×</button>
                   </div>
@@ -269,7 +293,7 @@ export default function Home() {
                 <label className="full">Comorbidades, separadas por vírgula<input name="conditions" placeholder="Hipertensão, diabetes" defaultValue={editingRelative?.conditions.join(", ") ?? ""} /></label>
                 <label className="full">Alergias, separadas por vírgula<input name="allergies" placeholder="Dipirona, amoxicilina" defaultValue={editingRelative?.allergies.join(", ") ?? ""} /></label>
               </div>
-              {!editingId && <fieldset><legend>Primeiro medicamento, opcional</legend><div className="form-grid three"><label>Nome<input name="medication" placeholder="Losartana" /></label><label>Dose<input name="dosage" placeholder="50 mg" /></label><label>Horário<input name="schedule" placeholder="Pela manhã" /></label></div></fieldset>}
+              {!editingId && <fieldset><legend>Primeiro medicamento, opcional</legend><div className="form-grid medication-fields"><label>Nome<input name="medication" placeholder="Losartana" /></label><label>Dose<input name="dosage" placeholder="50 mg" /></label><MedicationTimingFields /></div></fieldset>}
               <label className={editingId ? "edit-notes" : ""}>Observações<textarea name="notes" placeholder="Histórico clínico ou orientação importante" defaultValue={editingRelative?.notes ?? ""} /></label>
               <div className="form-actions"><button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</button><button className="submit-button" type="submit">{editingId ? "Salvar alterações" : "Salvar familiar"}</button></div>
             </form>
@@ -282,10 +306,10 @@ export default function Home() {
           <section className="modal medication-modal" role="dialog" aria-modal="true" aria-labelledby="medication-form-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-header"><div><p className="eyebrow">{selected.name}</p><h2 id="medication-form-title">Adicionar medicamento</h2></div><button type="button" aria-label="Fechar" onClick={() => setShowMedicationForm(false)}>×</button></div>
             <form onSubmit={addMedication}>
-              <div className="form-grid three">
+              <div className="form-grid medication-fields">
                 <label>Nome<input name="name" required autoFocus placeholder="Ex.: Losartana" /></label>
                 <label>Dose<input name="dosage" required placeholder="Ex.: 50 mg" /></label>
-                <label>Horário e frequência<input name="schedule" required placeholder="Ex.: Pela manhã" /></label>
+                <MedicationTimingFields />
               </div>
               <div className="form-actions"><button type="button" onClick={() => setShowMedicationForm(false)}>Cancelar</button><button className="submit-button" type="submit">Adicionar medicamento</button></div>
             </form>

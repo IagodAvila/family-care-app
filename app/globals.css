@@ -111,7 +111,7 @@ footer button { margin-left: auto; border: 0; background: none; color: var(--tea
 .modal-header h2, .privacy-modal h2 { margin: 0; letter-spacing: -1px; }
 .modal-header > button { width: 34px; height: 34px; border: 0; border-radius: 10px; background: #f0f4f2; color: var(--ink); font-size: 21px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.form-grid.three { grid-template-columns: 1.3fr .8fr 1.2fr; }
+.form-grid.medication-fields { grid-template-columns: 1.3fr .8fr .8fr 1fr; }
 form label { display: grid; gap: 7px; color: #3b5654; font-size: 11px; font-weight: 750; }
 form label.full { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; outline: 0; background: #fbfcfb; color: var(--ink); font-size: 12px; }
@@ -124,7 +124,7 @@ legend { padding: 0 7px; color: var(--teal); font-size: 10px; font-weight: 800; 
 .form-actions button { border: 0; border-radius: 10px; padding: 11px 17px; background: #eef2f0; color: var(--ink); font-weight: 750; }
 .submit-button, .form-actions .submit-button { border: 0; border-radius: 10px; padding: 11px 20px; background: var(--teal); color: white; font-weight: 800; }
 .privacy-modal { width: min(520px, 100%); text-align: center; }
-.medication-modal { width: min(700px, 100%); }
+.medication-modal { width: min(780px, 100%); }
 .privacy-symbol { width: 58px; height: 58px; margin: 0 auto 17px; display: grid; place-items: center; border-radius: 18px; background: var(--mint); color: var(--teal); font-size: 25px; }
 .privacy-modal h2 { margin-bottom: 12px; }
 .privacy-modal > p:not(.eyebrow) { color: var(--muted); font-size: 13px; line-height: 1.65; }
@@ -165,7 +165,7 @@ legend { padding: 0 7px; color: var(--teal); font-size: 10px; font-weight: 800; 
   footer { padding: 22px; display: block; }
   footer p { margin: 7px 0; }
   footer button { margin-left: 0; padding: 0; }
-  .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+  .form-grid, .form-grid.medication-fields { grid-template-columns: 1fr; }
   form label.full { grid-column: auto; }
   .modal { padding: 22px; }
 }

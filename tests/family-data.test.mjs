@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createRelative, deleteRelative, updateRelative } from "../app/family-data.mjs";
+import { createRelative, deleteRelative, removeLegacyStarterFamily, updateRelative } from "../app/family-data.mjs";
 
 function formData(values) {
   const data = new FormData();
@@ -23,7 +23,7 @@ const originalRelative = {
 };
 
 test("cadastra um familiar com dados de saúde e medicamento opcional", () => {
-  const relative = createRelative(formData({
+  const data = formData({
     name: "João Souza",
     relation: "Pai",
     birthDate: "1968-02-20",
@@ -32,9 +32,12 @@ test("cadastra um familiar com dados de saúde e medicamento opcional", () => {
     allergies: "Dipirona",
     medication: "Losartana",
     dosage: "50 mg",
-    schedule: "Pela manhã",
+    frequency: "2",
     notes: "Acompanhamento anual",
-  }), 0, "relative-2");
+  });
+  data.append("schedules", "Manhã");
+  data.append("schedules", "Noite");
+  const relative = createRelative(data, 0, "relative-2");
 
   assert.deepEqual(relative, {
     id: "relative-2",
@@ -44,7 +47,7 @@ test("cadastra um familiar com dados de saúde e medicamento opcional", () => {
     bloodType: "A+",
     conditions: ["Hipertensão", "Diabetes"],
     allergies: ["Dipirona"],
-    medications: [{ name: "Losartana", dosage: "50 mg", schedule: "Pela manhã" }],
+    medications: [{ name: "Losartana", dosage: "50 mg", frequency: 2, schedules: ["Manhã", "Noite"] }],
     notes: "Acompanhamento anual",
     color: "#277f7b",
   });
@@ -78,4 +81,11 @@ test("exclui somente o familiar selecionado", () => {
 
   assert.deepEqual(remaining, [secondRelative]);
   assert.equal(family.length, 2);
+});
+
+test("remove dados fictícios antigos sem apagar familiares cadastrados", () => {
+  const legacyRelative = { ...originalRelative, id: "antonio", name: "Antônio Almeida" };
+  const family = [legacyRelative, originalRelative];
+
+  assert.deepEqual(removeLegacyStarterFamily(family), [originalRelative]);
 });

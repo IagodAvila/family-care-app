@@ -1,10 +1,27 @@
 export const familyColors = ["#277f7b", "#8a6fbc", "#d7855e", "#3b6aa0", "#a26371"];
+const legacyStarterIds = new Set(["antonio", "lucia", "marina"]);
+
+export function removeLegacyStarterFamily(family) {
+  return family.filter((person) => !legacyStarterIds.has(person.id));
+}
 
 export function parseList(value) {
   return String(value ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+export function createMedication(data, nameField = "name") {
+  const schedules = data.getAll("schedules").map(String).filter(Boolean);
+  const legacySchedule = String(data.get("schedule") ?? "").trim();
+
+  return {
+    name: String(data.get(nameField) ?? "").trim(),
+    dosage: String(data.get("dosage") || "Não informada"),
+    frequency: Number(data.get("frequency") || schedules.length || 1),
+    schedules: schedules.length ? schedules : legacySchedule ? [legacySchedule] : [],
+  };
 }
 
 export function createRelative(data, familySize, id = crypto.randomUUID()) {
@@ -18,13 +35,7 @@ export function createRelative(data, familySize, id = crypto.randomUUID()) {
     bloodType: String(data.get("bloodType") ?? ""),
     conditions: parseList(data.get("conditions")),
     allergies: parseList(data.get("allergies")),
-    medications: medicationName
-      ? [{
-          name: medicationName,
-          dosage: String(data.get("dosage") || "Não informada"),
-          schedule: String(data.get("schedule") || "Não informado"),
-        }]
-      : [],
+    medications: medicationName ? [createMedication(data, "medication")] : [],
     notes: String(data.get("notes") ?? ""),
     color: familyColors[familySize % familyColors.length],
   };
