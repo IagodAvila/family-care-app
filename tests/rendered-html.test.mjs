@@ -34,13 +34,39 @@ test("server-renders the FamilyCare dashboard", async () => {
   assert.match(html, /<html lang="pt-BR">/i);
   assert.match(html, /<title>FamilyCare \| Saúde da família ao seu alcance<\/title>/i);
   assert.match(html, /<main class="app">/i);
-  assert.match(html, /Quem você ama, sempre bem cuidado\./i);
   assert.match(html, /Modo emergência/i);
-  assert.match(html, /Boas-vindas ao FamilyCare/i);
+  assert.match(html, /Dados de saúde da família, organizados neste dispositivo\./i);
+  assert.doesNotMatch(html, /Quem você ama, sempre bem cuidado|Informação certa, na hora que importa/i);
+  assert.match(html, /Nenhum familiar cadastrado/i);
   assert.match(html, /Comece sua rede de cuidados/i);
-  assert.match(html, /Cadastrar primeiro familiar/i);
+  assert.match(html, /Adicionar familiar/i);
   assert.doesNotMatch(html, /Antônio Almeida|Lúcia Almeida|Marina Almeida/i);
   assert.match(html, /aria-label="Navegação principal"/i);
+});
+
+test("prioriza o modo emergência e mantém ações destrutivas em menu secundário", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /className=\{emergencyMode \? "emergency-top-button active" : "emergency-top-button"\}/);
+  assert.match(page, /aria-pressed=\{emergencyMode\}/);
+  assert.match(page, /disabled=\{!selected\}/);
+  assert.match(page, /Sair do modo emergência/);
+  assert.match(page, /className="add-relative-compact"/);
+  assert.match(page, /aria-haspopup="menu"/);
+  assert.match(page, /aria-expanded=\{showMoreOptions\}/);
+  assert.match(page, /Excluir familiar/);
+  assert.doesNotMatch(page, /className="delete-button"/);
+  assert.match(page, /event\.key === "Escape"/);
+  assert.doesNotMatch(css, /\.emergency-active \.medications-section[^}]*display:\s*none/);
+  assert.match(page, /Medicamentos em uso/);
+  assert.match(page, /Nenhum medicamento informado\./);
+  assert.match(page, /!emergencyMode && <div className="record-actions">/);
+  assert.match(page, /todos os dados de .*incluindo medicamentos/i);
+  assert.match(css, /\.app-intro \{[^}]*padding: 16px 0 0/);
+  assert.doesNotMatch(css, /\.hero \{ min-height: 246px/);
 });
 
 test("ships production metadata without starter artifacts", async () => {
@@ -52,7 +78,7 @@ test("ships production metadata without starter artifacts", async () => {
     readFile(new URL("package.json", projectRoot), "utf8"),
   ]);
 
-  assert.match(html, /<meta name="description" content="Organize dados médicos essenciais/i);
+  assert.match(html, /<meta name="description" content="Dados de saúde da família organizados/i);
   assert.match(html, /<meta property="og:title" content="FamilyCare/i);
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Building your site/i);

@@ -11,20 +11,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: base,
     title: "FamilyCare | Saúde da família ao seu alcance",
-    description: "Organize dados médicos essenciais dos seus familiares e acesse tudo rapidamente em uma emergência.",
+    description: "Dados de saúde da família organizados neste dispositivo para consulta rápida.",
     openGraph: {
-      title: "FamilyCare | Informação certa, na hora que importa",
-      description: "Dados essenciais de saúde da sua família, organizados para quando cada segundo conta.",
+      title: "FamilyCare | Dados de saúde da família",
+      description: "Dados de saúde da família organizados para consulta rápida.",
       url: base,
       siteName: "FamilyCare",
       locale: "pt_BR",
       type: "website",
-      images: [{ url: "/og.png", width: 1536, height: 1024, alt: "FamilyCare, informação certa na hora que importa" }],
+      images: [{ url: "/og.png", width: 1536, height: 1024, alt: "FamilyCare, dados de saúde da família" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "FamilyCare | Informação certa, na hora que importa",
-      description: "Dados essenciais de saúde da sua família, organizados para emergências.",
+      title: "FamilyCare | Dados de saúde da família",
+      description: "Dados de saúde da família organizados para consulta rápida.",
       images: ["/og.png"],
     },
   };

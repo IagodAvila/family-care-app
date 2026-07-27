@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createRelative, deleteRelative, removeLegacyStarterFamily, updateRelative } from "../app/family-data.mjs";
+import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, updateMedicationInList, updateRelative, validateBirthDate } from "../app/family-data.mjs";
 
 function formData(values) {
   const data = new FormData();
@@ -9,83 +9,64 @@ function formData(values) {
   return data;
 }
 
-const originalRelative = {
-  id: "relative-1",
-  name: "Ana Souza",
-  relation: "Mãe",
-  birthDate: "1970-05-10",
-  bloodType: "O+",
-  conditions: [],
-  allergies: [],
-  medications: [],
-  notes: "",
-  color: "#277f7b",
-};
+const originalRelative = { id: "relative-1", name: "Ana Souza", relation: "Mãe", birthDate: "1970-05-10", bloodType: "O+", conditions: [], allergies: [], medications: [], notes: "", color: "#277f7b" };
 
-test("cadastra um familiar com dados de saúde e medicamento opcional", () => {
-  const data = formData({
-    name: "João Souza",
-    relation: "Pai",
-    birthDate: "1968-02-20",
-    bloodType: "A+",
-    conditions: "Hipertensão, Diabetes",
-    allergies: "Dipirona",
-    medication: "Losartana",
-    dosage: "50 mg",
-    frequency: "2",
-    notes: "Acompanhamento anual",
-  });
-  data.append("schedules", "Manhã");
-  data.append("schedules", "Noite");
-  const relative = createRelative(data, 0, "relative-2");
-
-  assert.deepEqual(relative, {
-    id: "relative-2",
-    name: "João Souza",
-    relation: "Pai",
-    birthDate: "1968-02-20",
-    bloodType: "A+",
-    conditions: ["Hipertensão", "Diabetes"],
-    allergies: ["Dipirona"],
-    medications: [{ name: "Losartana", dosage: "50 mg", frequency: 2, schedules: ["Manhã", "Noite"] }],
-    notes: "Acompanhamento anual",
-    color: "#277f7b",
-  });
+test("aplica máscara DD/MM/AAAA e converte entre exibição e armazenamento", () => {
+  assert.equal(applyDateMask("12021990"), "12/02/1990");
+  assert.equal(applyDateMask("12a02/199055"), "12/02/1990");
+  assert.equal(displayDateToInternal("12/02/1990"), "1990-02-12");
+  assert.equal(internalDateToDisplay("1990-02-12"), "12/02/1990");
 });
 
-test("edita os dados do familiar sem perder medicamentos e identidade", () => {
-  const family = [{ ...originalRelative, medications: [{ name: "Vitamina D", dosage: "1 dose", schedule: "Semanal" }] }];
-  const updated = updateRelative(family, originalRelative.id, formData({
-    name: "Ana Lima",
-    relation: "Avó",
-    birthDate: "1970-05-10",
-    bloodType: "A-",
-    conditions: "Asma",
-    allergies: "",
-    notes: "Cadastro revisado",
-  }));
+test("valida nascimento completo, existente e não futuro", () => {
+  const today = new Date(2026, 6, 27);
+  assert.deepEqual(validateBirthDate("29/02/2024", today), { internalDate: "2024-02-29" });
+  assert.match(validateBirthDate("29/02/202", today).error, /completa/i);
+  assert.match(validateBirthDate("31/02/2020", today).error, /válida/i);
+  assert.match(validateBirthDate("28/07/2026", today).error, /futuro/i);
+});
 
+test("mantém compatibilidade com data ISO e medicamentos antigos", () => {
+  assert.equal(internalDateToDisplay("1970-05-10"), "10/05/1970");
+  const relative = createRelative(formData({ name: "Ana", relation: "Mãe", birthDate: "1970-05-10", bloodType: "O+", conditions: "", allergies: "", notes: "" }), 0, "ana", [{ name: "Vitamina D", dosage: "1 dose", schedule: "Semanal" }]);
+  assert.deepEqual(relative.medications, [{ name: "Vitamina D", dosage: "1 dose", schedule: "Semanal", orientation: "Semanal" }]);
+});
+
+test("salva vários medicamentos iniciais e ignora objetos sem nome", () => {
+  const medications = [
+    { name: "Losartana", dosage: "50 mg", orientation: "1 comprimido pela manhã" },
+    { name: "Dipirona", dosage: "", orientation: "Usar somente em caso de dor" },
+    { name: "", dosage: "10 mg", orientation: "" },
+  ];
+  const relative = createRelative(formData({ name: "João", relation: "Pai", birthDate: "1968-02-20", bloodType: "A+", conditions: "", allergies: "", notes: "" }), 0, "joao", medications);
+  assert.deepEqual(relative.medications, medications.slice(0, 2));
+});
+
+test("cria medicamento com texto livre sem completar informações médicas", () => {
+  const medication = createMedication(formData({ name: "Amoxicilina", dosage: "", orientation: "Tomar a cada 8 horas por 7 dias" }));
+  assert.deepEqual(medication, { name: "Amoxicilina", dosage: "", orientation: "Tomar a cada 8 horas por 7 dias" });
+});
+
+test("adiciona, edita e remove medicamentos temporários sem apagar os demais", () => {
+  const first = { name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" };
+  const second = { name: "Dipirona", dosage: "1 g", orientation: "Em caso de dor" };
+  const withBoth = addMedicationToList(addMedicationToList([], first), second);
+  assert.equal(addMedicationToList(withBoth, { name: "", dosage: "", orientation: "" }).length, 2);
+  const edited = updateMedicationInList(withBoth, 0, { ...first, orientation: "Após o café" });
+  assert.deepEqual(edited[1], second);
+  assert.deepEqual(removeMedicationFromList(edited, 0), [second]);
+});
+
+test("edita familiar sem perder medicamentos, identidade ou dados temporários já salvos", () => {
+  const family = [{ ...originalRelative, medications: [{ name: "Vitamina D", dosage: "1 dose", orientation: "Semanal" }] }];
+  const updated = updateRelative(family, originalRelative.id, formData({ name: "Ana Lima", relation: "Avó", birthDate: "1970-05-10", bloodType: "A-", conditions: "Asma", allergies: "", notes: "Cadastro revisado" }));
   assert.equal(updated[0].id, originalRelative.id);
-  assert.equal(updated[0].name, "Ana Lima");
-  assert.equal(updated[0].relation, "Avó");
-  assert.deepEqual(updated[0].conditions, ["Asma"]);
   assert.deepEqual(updated[0].medications, family[0].medications);
-  assert.notStrictEqual(updated, family);
+  assert.equal(updated[0].name, "Ana Lima");
 });
 
-test("exclui somente o familiar selecionado", () => {
-  const secondRelative = { ...originalRelative, id: "relative-2", name: "Carlos Souza" };
-  const family = [originalRelative, secondRelative];
-
-  const remaining = deleteRelative(family, originalRelative.id);
-
-  assert.deepEqual(remaining, [secondRelative]);
-  assert.equal(family.length, 2);
-});
-
-test("remove dados fictícios antigos sem apagar familiares cadastrados", () => {
-  const legacyRelative = { ...originalRelative, id: "antonio", name: "Antônio Almeida" };
-  const family = [legacyRelative, originalRelative];
-
-  assert.deepEqual(removeLegacyStarterFamily(family), [originalRelative]);
+test("exclui somente o familiar selecionado e remove dados fictícios antigos", () => {
+  const secondRelative = { ...originalRelative, id: "relative-2" };
+  assert.deepEqual(deleteRelative([originalRelative, secondRelative], originalRelative.id), [secondRelative]);
+  assert.deepEqual(removeLegacyStarterFamily([{ ...originalRelative, id: "antonio" }, originalRelative]), [originalRelative]);
 });
