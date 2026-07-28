@@ -7,7 +7,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Ave
 button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
-.app { min-height: 100vh; }
+.app { min-height: 100vh; display: flex; flex-direction: column; }
 .topbar { height: 76px; padding: 0 max(28px, calc((100vw - 1180px) / 2)); display: flex; align-items: center; gap: 42px; background: rgba(255,255,255,.95); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 20px; font-weight: 800; letter-spacing: -.6px; }
 .brand > span:last-child span { color: var(--teal); }
@@ -102,7 +102,7 @@ button { cursor: pointer; }
 .notes { margin: 0 28px 28px; padding: 15px 17px; border-left: 3px solid #d4a74b; border-radius: 0 10px 10px 0; background: #fff9ec; }
 .notes strong { color: #8a6728; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
 .notes p { margin: 5px 0 0; color: #665739; font-size: 12px; }
-footer { padding: 26px max(28px, calc((100vw - 1180px) / 2)); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 24px; background: white; color: var(--muted); font-size: 11px; }
+footer { margin-top: auto; padding: 26px max(28px, calc((100vw - 1180px) / 2)); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 24px; background: white; color: var(--muted); font-size: 11px; }
 footer span { color: var(--ink); font-weight: 850; }
 footer p { margin: 0; }
 footer button { margin-left: auto; border: 0; background: none; color: var(--teal); font-weight: 750; }
