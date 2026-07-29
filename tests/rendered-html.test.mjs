@@ -45,9 +45,10 @@ test("server-renders the FamilyCare dashboard", async () => {
 });
 
 test("prioriza o modo emergência e mantém ações destrutivas em menu secundário", async () => {
-  const [page, css] = await Promise.all([
+  const [page, css, modal] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
+    readFile(new URL("app/modal.tsx", projectRoot), "utf8"),
   ]);
 
   assert.match(page, /className=\{emergencyMode \? "emergency-top-button active" : "emergency-top-button"\}/);
@@ -55,18 +56,104 @@ test("prioriza o modo emergência e mantém ações destrutivas em menu secundá
   assert.match(page, /disabled=\{!selected\}/);
   assert.match(page, /Sair do modo emergência/);
   assert.match(page, /className="add-relative-compact"/);
-  assert.match(page, /aria-haspopup="menu"/);
+  assert.match(page, /aria-label="Adicionar familiar"/);
+  assert.doesNotMatch(page, /<span aria-hidden="true">!<\/span> \{emergencyMode/);
+  assert.match(page, /aria-haspopup="true"/);
+  assert.match(page, /aria-controls="more-options-popover"/);
   assert.match(page, /aria-expanded=\{showMoreOptions\}/);
+  assert.match(page, /deleteActionRef\.current\?\.focus\(\)/);
+  assert.match(page, /moreOptionsButtonRef\.current\?\.focus\(\)/);
   assert.match(page, /Excluir familiar/);
+  assert.doesNotMatch(page, /role="menu(?:item)?"/);
   assert.doesNotMatch(page, /className="delete-button"/);
   assert.match(page, /event\.key === "Escape"/);
   assert.doesNotMatch(css, /\.emergency-active \.medications-section[^}]*display:\s*none/);
   assert.match(page, /Medicamentos em uso/);
   assert.match(page, /Nenhum medicamento informado\./);
   assert.match(page, /!emergencyMode && <div className="record-actions">/);
+  assert.match(page, /id="quick-family-select"/);
+  assert.match(page, /Selecionar familiar no modo emergência/);
+  assert.match(page, /onChange=\{\(event\) => setSelectedId\(event\.target\.value\)\}/);
   assert.match(page, /todos os dados de .*incluindo medicamentos/i);
   assert.match(css, /\.app-intro \{[^}]*padding: 16px 0 0/);
   assert.doesNotMatch(css, /\.hero \{ min-height: 246px/);
+  assert.match(modal, /role="dialog"/);
+  assert.match(modal, /aria-modal="true"/);
+  assert.match(modal, /aria-labelledby=\{titleId\}/);
+});
+
+test("modal reutilizável gerencia foco, Escape, backdrop, isolamento e rolagem", async () => {
+  const [page, modal] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/modal.tsx", projectRoot), "utf8"),
+  ]);
+
+  assert.equal((page.match(/<Modal /g) ?? []).length, 3);
+  assert.match(page, /initialFocusSelector='input\[name="name"\]'/);
+  assert.match(page, /initialFocusSelector="\[data-modal-primary\]"/);
+  assert.doesNotMatch(page, /autoFocus/);
+  assert.match(modal, /getFocusableElements\(dialog\)/);
+  assert.match(modal, /trapDialogFocus\(event, dialogRef\.current\)/);
+  assert.match(modal, /event\.key === "Escape"/);
+  assert.match(modal, /isDirectBackdropClick\(event\)/);
+  assert.match(modal, /lockDocumentScroll\(document\)/);
+  assert.match(modal, /app\.inert = true/);
+  assert.match(modal, /openerRef\.current\?\.focus\(\)/);
+  assert.match(modal, /window\.cancelAnimationFrame\(animationFrame\)/);
+});
+
+test("mantém muitos familiares em lista vertical responsiva e nomes longos contidos", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /role="region" aria-label="Lista de familiares" tabIndex=\{0\}/);
+  assert.match(css, /\.family-list \{[^}]*max-height:[^}]*overflow-y: auto;[^}]*overflow-x: hidden;/);
+  assert.match(css, /\.person-card \{[^}]*min-width: 0;[^}]*overflow: hidden;/);
+  assert.match(css, /\.person-summary strong, \.person-summary small \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
+  assert.doesNotMatch(css, /\.family-list \{[^}]*grid-template-columns: repeat\(3/);
+  assert.doesNotMatch(css, /\.family-list \{[^}]*overflow-x: auto/);
+  assert.match(css, /@media \(max-width: 650px\)[\s\S]*\.person-card \{ min-height: 68px; \}/);
+});
+
+test("oferece troca rápida sticky na ficha e no modo emergência sem ações de edição", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /className="quick-family-switcher"/);
+  assert.match(page, /value=\{selected\.id\}/);
+  assert.match(page, /family\.map\(\(person\) => <option/);
+  assert.match(page, /Familiar em emergência/);
+  assert.match(css, /\.emergency-active \.quick-family-switcher \{[^}]*position: sticky;/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.quick-family-switcher \{ position: sticky;/);
+  assert.match(page, /!emergencyMode && <div className="record-actions">/);
+  assert.match(page, /!emergencyMode && <button className="remove-medication"/);
+});
+
+test("mantém armazenamento como informação global e preserva o estado vazio", async () => {
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+
+  assert.doesNotMatch(page, /Dados salvos neste dispositivo/);
+  assert.match(page, /Seus dados permanecem apenas neste dispositivo nesta versão\./);
+  assert.match(page, /Nenhum familiar cadastrado/);
+  assert.match(page, /<button className="submit-button" type="button" onClick=\{openAddRelative\}>Adicionar familiar<\/button>/);
+});
+
+test("mantém nome acessível completo e rótulo curto de emergência em 320 px", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /aria-label=\{emergencyMode \? "Sair do modo emergência" : "Ativar modo emergência"\}/);
+  assert.match(page, /className="emergency-label-mobile">Sair da emergência/);
+  assert.match(css, /@media \(max-width: 350px\)/);
+  assert.match(css, /\.emergency-label-full \{ display: none; \}/);
+  assert.match(css, /\.emergency-label-mobile \{ display: inline; \}/);
+  assert.match(css, /:focus-visible \{ outline: 3px solid #0b6f69;/);
 });
 
 test("ships production metadata without starter artifacts", async () => {
@@ -83,6 +170,7 @@ test("ships production metadata without starter artifacts", async () => {
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Building your site/i);
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/i);
+  assert.doesNotMatch(page, /fixture-[1-8]|Medicamento fictício/i);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/i);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/i);
   await assert.rejects(access(new URL("app/_sites-preview", projectRoot)));

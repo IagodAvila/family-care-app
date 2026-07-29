@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative as removeRelative, displayDateToInternal, internalDateToDisplay, normalizeMedication, removeLegacyStarterFamily, removeMedicationFromList, updateMedicationInList, updateRelative, validateBirthDate } from "./family-data.mjs";
+import Modal from "./modal";
 
 type Medication = { name: string; dosage: string; orientation?: string; frequency?: number; schedules?: string[]; schedule?: string };
 type Relative = {
@@ -44,10 +45,10 @@ function medicationTiming(medication: Medication) {
   return normalized.orientation || "Orientação de uso não informada";
 }
 
-function MedicationFields({ autoFocus = false }: { autoFocus?: boolean }) {
+function MedicationFields() {
   return (
     <div className="form-grid medication-fields">
-      <label>Nome<input name="name" required autoFocus={autoFocus} placeholder="Ex.: Losartana" /></label>
+      <label>Nome<input name="name" required placeholder="Ex.: Losartana" /></label>
       <label>Dosagem ou apresentação<input name="dosage" placeholder="Ex.: 50 mg" /></label>
       <label className="full">Orientação de uso<input name="orientation" placeholder="Ex.: Tomar a cada 8 horas por 7 dias" /></label>
     </div>
@@ -120,6 +121,8 @@ export default function Home() {
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const moreOptionsRef = useRef<HTMLDivElement>(null);
+  const moreOptionsButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteActionRef = useRef<HTMLButtonElement>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect -- This effect hydrates React state from browser storage. */
   useEffect(() => {
@@ -147,9 +150,18 @@ export default function Home() {
 
   useEffect(() => {
     if (!showMoreOptions) return;
+    deleteActionRef.current?.focus();
+
     function closeMenu(event: MouseEvent | KeyboardEvent) {
-      if (event instanceof KeyboardEvent && event.key === "Escape") setShowMoreOptions(false);
-      if (event instanceof MouseEvent && !moreOptionsRef.current?.contains(event.target as Node)) setShowMoreOptions(false);
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
+        event.preventDefault();
+        setShowMoreOptions(false);
+        moreOptionsButtonRef.current?.focus();
+      }
+      if (event instanceof MouseEvent && !moreOptionsRef.current?.contains(event.target as Node)) {
+        setShowMoreOptions(false);
+        moreOptionsButtonRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", closeMenu);
     document.addEventListener("keydown", closeMenu);
@@ -239,8 +251,8 @@ export default function Home() {
           <a className="active" href="#familiares">Familiares</a>
           <button type="button" onClick={() => setShowPrivacy(true)}>Privacidade</button>
         </nav>
-        <button className={emergencyMode ? "emergency-top-button active" : "emergency-top-button"} type="button" onClick={toggleEmergencyMode} disabled={!selected} aria-pressed={emergencyMode} aria-describedby={!selected ? "emergency-unavailable" : undefined}>
-          <span aria-hidden="true">!</span> {emergencyMode ? "Sair do modo emergência" : "Modo emergência"}
+        <button className={emergencyMode ? "emergency-top-button active" : "emergency-top-button"} type="button" onClick={toggleEmergencyMode} disabled={!selected} aria-pressed={emergencyMode} aria-label={emergencyMode ? "Sair do modo emergência" : "Ativar modo emergência"} aria-describedby={!selected ? "emergency-unavailable" : undefined}>
+          {emergencyMode ? <><span className="emergency-label-full">Sair do modo emergência</span><span className="emergency-label-mobile">Sair da emergência</span></> : "Modo emergência"}
         </button>
         {!selected && <span className="sr-only" id="emergency-unavailable">Cadastre um familiar para usar o modo emergência.</span>}
       </header>
@@ -253,13 +265,13 @@ export default function Home() {
         <aside className="family-panel">
           <div className="panel-title">
             <div><p className="eyebrow">Minha rede</p><h2>Familiares</h2></div>
-            <div className="family-panel-actions"><span>{family.length}</span><button className="add-relative-compact" type="button" onClick={openAddRelative}><span aria-hidden="true">＋</span> Adicionar</button></div>
+            <div className="family-panel-actions"><span>{family.length}</span><button className="add-relative-compact" type="button" onClick={openAddRelative} aria-label="Adicionar familiar"><span aria-hidden="true">＋</span><span className="add-relative-label">Adicionar</span></button></div>
           </div>
           <label className="search">
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar familiar" />
           </label>
-          <div className="family-list">
+          <div className="family-list" role="region" aria-label="Lista de familiares" tabIndex={0}>
             {filtered.map((person) => (
               <button
                 className={person.id === selected?.id ? "person-card selected" : "person-card"}
@@ -277,17 +289,30 @@ export default function Home() {
         </aside>
 
         {selected ? <article className="medical-record">
+          <div className="quick-family-switcher">
+            <label htmlFor="quick-family-select">{emergencyMode ? "Familiar em emergência" : "Trocar familiar"}</label>
+            <div className="quick-family-control">
+              <span className="avatar quick-avatar" style={{ backgroundColor: selected.color }} aria-hidden="true">{initials(selected.name)}</span>
+              <select
+                id="quick-family-select"
+                value={selected.id}
+                onChange={(event) => setSelectedId(event.target.value)}
+                aria-label={emergencyMode ? "Selecionar familiar no modo emergência" : "Selecionar familiar para visualizar a ficha"}
+              >
+                {family.map((person) => <option key={person.id} value={person.id}>{person.name} — {person.relation}</option>)}
+              </select>
+            </div>
+          </div>
           <div className="record-header">
             <div className="identity">
               <span className="avatar avatar-large" style={{ backgroundColor: selected.color }}>{initials(selected.name)}</span>
               <div><span className="relation-label">{selected.relation}</span><h2>{selected.name}</h2><p>{formatDate(selected.birthDate)} · {ageFrom(selected.birthDate)} anos</p></div>
             </div>
             {!emergencyMode && <div className="record-actions">
-              <div className="updated"><span aria-hidden="true">✓</span> Dados salvos neste dispositivo</div>
               <button className="edit-button" type="button" onClick={openEditRelative}><span aria-hidden="true">✎</span> Editar familiar</button>
               <div className="more-options" ref={moreOptionsRef}>
-                <button className="more-options-button" type="button" aria-label="Mais opções para este familiar" aria-haspopup="menu" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions((current) => !current)}>⋯</button>
-                {showMoreOptions && <div className="more-options-menu" role="menu" aria-label="Mais opções"><button className="delete-menu-item" type="button" role="menuitem" onClick={deleteRelative}>Excluir familiar</button></div>}
+                <button className="more-options-button" ref={moreOptionsButtonRef} type="button" aria-label="Mais opções para este familiar" aria-haspopup="true" aria-controls="more-options-popover" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions((current) => !current)}>⋯</button>
+                {showMoreOptions && <div className="more-options-menu" id="more-options-popover"><button className="delete-menu-item" ref={deleteActionRef} type="button" onClick={deleteRelative}>Excluir familiar</button></div>}
               </div>
             </div>}
           </div>
@@ -340,32 +365,26 @@ export default function Home() {
       <footer><span>familycare</span><p>Seus dados permanecem apenas neste dispositivo nesta versão.</p><button type="button" onClick={() => setShowPrivacy(true)}>Como protegemos seus dados</button></footer>
 
       {showForm && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => { setShowForm(false); setEditingId(null); }}>
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="form-title" onMouseDown={(event) => event.stopPropagation()}>
+        <Modal titleId="form-title" initialFocusSelector='input[name="name"]' onClose={() => { setShowForm(false); setEditingId(null); }}>
             <div className="modal-header"><div><p className="eyebrow">{editingId ? "Atualizar cadastro" : "Nova pessoa"}</p><h2 id="form-title">{editingId ? "Editar familiar" : "Adicionar familiar"}</h2></div><button type="button" aria-label="Fechar" onClick={() => { setShowForm(false); setEditingId(null); }}>×</button></div>
             <RelativeForm relative={editingRelative} isEditing={Boolean(editingId)} onSave={saveRelative} onCancel={() => { setShowForm(false); setEditingId(null); }} />
-          </section>
-        </div>
+        </Modal>
       )}
 
       {showMedicationForm && selected && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowMedicationForm(false)}>
-          <section className="modal medication-modal" role="dialog" aria-modal="true" aria-labelledby="medication-form-title" onMouseDown={(event) => event.stopPropagation()}>
+        <Modal className="medication-modal" titleId="medication-form-title" initialFocusSelector='input[name="name"]' onClose={() => setShowMedicationForm(false)}>
             <div className="modal-header"><div><p className="eyebrow">{selected.name}</p><h2 id="medication-form-title">Adicionar medicamento</h2></div><button type="button" aria-label="Fechar" onClick={() => setShowMedicationForm(false)}>×</button></div>
             <form onSubmit={addMedication}>
-              <MedicationFields autoFocus />
+              <MedicationFields />
               <div className="form-actions"><button type="button" onClick={() => setShowMedicationForm(false)}>Cancelar</button><button className="submit-button" type="submit">Adicionar medicamento</button></div>
             </form>
-          </section>
-        </div>
+        </Modal>
       )}
 
       {showPrivacy && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowPrivacy(false)}>
-          <section className="modal privacy-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="privacy-symbol">⌂</div><p className="eyebrow">Privacidade desde o início</p><h2 id="privacy-title">Nesta demonstração, os dados ficam no seu aparelho.</h2><p>As informações cadastradas são salvas somente no navegador deste dispositivo. Uma versão de produção deverá incluir acesso protegido, criptografia e consentimento de cada familiar.</p><button className="submit-button" type="button" onClick={() => setShowPrivacy(false)}>Entendi</button>
-          </section>
-        </div>
+        <Modal className="privacy-modal" titleId="privacy-title" initialFocusSelector="[data-modal-primary]" onClose={() => setShowPrivacy(false)}>
+          <div className="privacy-symbol">⌂</div><p className="eyebrow">Privacidade desde o início</p><h2 id="privacy-title">Nesta demonstração, os dados ficam no seu aparelho.</h2><p>As informações cadastradas são salvas somente no navegador deste dispositivo. Uma versão de produção deverá incluir acesso protegido, criptografia e consentimento de cada familiar.</p><button className="submit-button" data-modal-primary type="button" onClick={() => setShowPrivacy(false)}>Entendi</button>
+        </Modal>
       )}
     </main>
   );
