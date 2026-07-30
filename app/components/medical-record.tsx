@@ -70,36 +70,32 @@ export function MedicalRecord({
 
   return (
     <article className="medical-record">
-      <div className="quick-family-switcher">
-        <label htmlFor="quick-family-select">
-          {emergencyMode ? "Familiar em emergência" : "Trocar familiar"}
-        </label>
-        <div className="quick-family-control">
-          <span
-            className="avatar quick-avatar"
-            style={{ backgroundColor: selected.color }}
-            aria-hidden="true"
-          >
-            {getInitials(selected.name)}
-          </span>
-          <select
-            id="quick-family-select"
-            value={selected.id}
-            onChange={(event) => onSelectRelative(event.target.value)}
-            aria-label={
-              emergencyMode
-                ? "Selecionar familiar no modo emergência"
-                : "Selecionar familiar para visualizar a ficha"
-            }
-          >
-            {family.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name} — {person.relation}
-              </option>
-            ))}
-          </select>
+      {emergencyMode && (
+        <div className="quick-family-switcher">
+          <label htmlFor="quick-family-select">Familiar em emergência</label>
+          <div className="quick-family-control">
+            <span
+              className="avatar quick-avatar"
+              style={{ backgroundColor: selected.color }}
+              aria-hidden="true"
+            >
+              {getInitials(selected.name)}
+            </span>
+            <select
+              id="quick-family-select"
+              value={selected.id}
+              onChange={(event) => onSelectRelative(event.target.value)}
+              aria-label="Selecionar familiar no modo emergência"
+            >
+              {family.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name} — {person.relation}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="record-header">
         <div className="identity">

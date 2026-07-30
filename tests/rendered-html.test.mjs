@@ -135,18 +135,18 @@ test("mantém muitos familiares em lista vertical responsiva e nomes longos cont
   assert.match(css, /@media \(max-width: 650px\)[\s\S]*\.person-card \{ min-height: 68px; \}/);
 });
 
-test("oferece troca rápida sticky na ficha e no modo emergência sem ações de edição", async () => {
+test("oferece troca rápida apenas no modo emergência e oculta ações de edição", async () => {
   const [page, css] = await Promise.all([
     readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
-  assert.match(page, /className="quick-family-switcher"/);
+  assert.match(page, /\{emergencyMode && \([\s\S]*className="quick-family-switcher"/);
   assert.match(page, /value=\{selected\.id\}/);
   assert.match(page, /family\.map\(\(person\) => \([\s\S]*<option/);
   assert.match(page, /Familiar em emergência/);
+  assert.doesNotMatch(page, /Trocar familiar/);
   assert.match(css, /\.emergency-active \.quick-family-switcher \{[^}]*position: sticky;/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.quick-family-switcher \{ position: sticky;/);
   assert.match(page, /!emergencyMode && \([\s\S]*<div className="record-actions">/);
   assert.match(page, /!emergencyMode && \([\s\S]*className="remove-medication"/);
 });
