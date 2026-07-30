@@ -1,5 +1,5 @@
 import type { Medication } from "@/types/family";
-import { normalizeMedication } from "./family-data.mjs";
+import { normalizeMedication } from "./family-data";
 
 export function getInitials(name: string) {
   return name
@@ -28,6 +28,6 @@ export function formatDate(date: string) {
 }
 
 export function getMedicationTiming(medication: Medication) {
-  const normalized = normalizeMedication(medication) as Medication;
+  const normalized = normalizeMedication(medication);
   return normalized.orientation || "Orientação de uso não informada";
 }

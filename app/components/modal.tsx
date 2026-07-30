@@ -13,7 +13,7 @@ import {
   isDirectBackdropClick,
   lockDocumentScroll,
   trapDialogFocus,
-} from "@/lib/dialog-behavior.mjs";
+} from "@/lib/dialog-behavior";
 
 type ModalProps = {
   children: ReactNode;
@@ -53,7 +53,7 @@ export function Modal({
       const requestedTarget = initialFocusSelector
         ? dialog.querySelector<HTMLElement>(initialFocusSelector)
         : null;
-      const firstFocusable = getFocusableElements(dialog)[0] as HTMLElement | undefined;
+      const firstFocusable = getFocusableElements(dialog)[0];
       const target = requestedTarget ?? firstFocusable ?? dialog;
       target.focus();
     });

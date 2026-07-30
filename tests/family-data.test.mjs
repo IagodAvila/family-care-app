@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, updateMedicationInList, updateRelative, validateBirthDate } from "../lib/family-data.mjs";
+import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, restoreFamily, updateMedicationInList, updateRelative, validateBirthDate } from "../lib/family-data.ts";
 
 function formData(values) {
   const data = new FormData();
@@ -30,6 +30,40 @@ test("mantém compatibilidade com data ISO e medicamentos antigos", () => {
   assert.equal(internalDateToDisplay("1970-05-10"), "10/05/1970");
   const relative = createRelative(formData({ name: "Ana", relation: "Mãe", birthDate: "1970-05-10", bloodType: "O+", conditions: "", allergies: "", notes: "" }), 0, "ana", [{ name: "Vitamina D", dosage: "1 dose", schedule: "Semanal" }]);
   assert.deepEqual(relative.medications, [{ name: "Vitamina D", dosage: "1 dose", schedule: "Semanal", orientation: "Semanal" }]);
+});
+
+test("restaura o formato antigo persistido sem descartar horários legados", () => {
+  const restored = restoreFamily([{
+    ...originalRelative,
+    id: "antonio",
+  }, {
+    id: originalRelative.id,
+    name: originalRelative.name,
+    relation: originalRelative.relation,
+    birthDate: originalRelative.birthDate,
+    bloodType: originalRelative.bloodType,
+    medications: [{
+      name: "Vitamina D",
+      dosage: "1 dose",
+      frequency: 1,
+      schedules: ["08:00", "20:00"],
+      schedule: "Semanal",
+    }],
+  }]);
+
+  assert.equal(restored.length, 1);
+  assert.deepEqual(restored[0].conditions, []);
+  assert.deepEqual(restored[0].allergies, []);
+  assert.equal(restored[0].notes, "");
+  assert.equal(restored[0].color, "#277f7b");
+  assert.deepEqual(restored[0].medications, [{
+    name: "Vitamina D",
+    dosage: "1 dose",
+    orientation: "08:00 e 20:00",
+    frequency: 1,
+    schedules: ["08:00", "20:00"],
+    schedule: "Semanal",
+  }]);
 });
 
 test("salva vários medicamentos iniciais e ignora objetos sem nome", () => {

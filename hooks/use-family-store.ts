@@ -5,10 +5,9 @@ import {
   createMedication,
   createRelative,
   deleteRelative,
-  normalizeMedication,
-  removeLegacyStarterFamily,
+  restoreFamily,
   updateRelative,
-} from "@/lib/family-data.mjs";
+} from "@/lib/family-data";
 import type { Medication, Relative } from "@/types/family";
 
 const STORAGE_KEY = "familycare-family";
@@ -24,13 +23,8 @@ export function useFamilyStore() {
 
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as Relative[];
-        const savedFamily = (removeLegacyStarterFamily(parsed) as Relative[]).map((person) => ({
-          ...person,
-          medications: (Array.isArray(person.medications) ? person.medications : [])
-            .map((medication) => normalizeMedication(medication) as Medication)
-            .filter((medication) => medication.name),
-        }));
+        const parsed: unknown = JSON.parse(saved);
+        const savedFamily = restoreFamily(parsed);
 
         setFamily(savedFamily);
         setSelectedId(savedFamily[0]?.id ?? "");
@@ -53,7 +47,7 @@ export function useFamilyStore() {
 
   function saveRelative(editingId: string | null, data: FormData, medications: Medication[]) {
     if (editingId) {
-      setFamily((current) => updateRelative(current, editingId, data) as Relative[]);
+      setFamily((current) => updateRelative(current, editingId, data));
       return;
     }
 
@@ -62,7 +56,7 @@ export function useFamilyStore() {
       family.length,
       crypto.randomUUID(),
       medications,
-    ) as Relative;
+    );
 
     setFamily((current) => [...current, person]);
     setSelectedId(person.id);
@@ -81,7 +75,7 @@ export function useFamilyStore() {
     );
     if (!finalConfirmation) return false;
 
-    const remainingFamily = deleteRelative(family, selected.id) as Relative[];
+    const remainingFamily = deleteRelative(family, selected.id);
     setFamily(remainingFamily);
     setSelectedId(remainingFamily[0]?.id ?? "");
     return remainingFamily.length === 0;
@@ -90,7 +84,7 @@ export function useFamilyStore() {
   function addMedication(data: FormData) {
     if (!selected) return false;
 
-    const medication = createMedication(data) as Medication;
+    const medication = createMedication(data);
     if (!medication.name) return false;
 
     setFamily((current) =>

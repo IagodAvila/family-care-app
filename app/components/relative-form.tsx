@@ -9,7 +9,7 @@ import {
   removeMedicationFromList,
   updateMedicationInList,
   validateBirthDate,
-} from "@/lib/family-data.mjs";
+} from "@/lib/family-data";
 import type { Medication, Relative } from "@/types/family";
 
 type RelativeFormProps = {
@@ -46,8 +46,8 @@ export function RelativeForm({
     const medication = { ...medicationDraft, name: medicationDraft.name.trim() };
     setMedications((current) =>
       editingMedicationIndex === null
-        ? addMedicationToList(current, medication) as Medication[]
-        : updateMedicationInList(current, editingMedicationIndex, medication) as Medication[],
+        ? addMedicationToList(current, medication)
+        : updateMedicationInList(current, editingMedicationIndex, medication),
     );
     setMedicationError("");
     setMedicationDraft(EMPTY_MEDICATION);
@@ -75,7 +75,7 @@ export function RelativeForm({
   }
 
   function removeTemporaryMedication(index: number) {
-    setMedications((current) => removeMedicationFromList(current, index) as Medication[]);
+    setMedications((current) => removeMedicationFromList(current, index));
 
     if (editingMedicationIndex === index) {
       setMedicationDraft(EMPTY_MEDICATION);
