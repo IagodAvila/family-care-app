@@ -80,13 +80,27 @@ Antes de utilizar o projeto em produção, recomenda-se implementar autenticaç�
 
 ```text
 app/
-├── globals.css       # Estilos da aplicação
+├── components/       # Componentes React e formulários
+├── globals.css       # Estilos globais da aplicação
 ├── layout.tsx        # Layout e metadados
-└── page.tsx          # Interface e regras do FamilyCare
+└── page.tsx          # Composição e estado da tela
+
+hooks/
+└── use-family-store.ts # Estado, persistência e operações da família
+
+lib/
+├── dialog-behavior.mjs # Regras de acessibilidade dos diálogos
+├── family-data.mjs     # Regras de cadastro e medicamentos
+└── family-format.ts    # Formatação para exibição
+
+types/
+└── family.ts         # Tipos de familiar e medicamento
 
 db/
 ├── index.ts          # Configuração de acesso ao banco
 └── schema.ts         # Esquema de dados
+
+public/               # Imagens e assets estáticos
 ```
 
 ## Aviso

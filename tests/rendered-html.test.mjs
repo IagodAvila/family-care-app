@@ -3,6 +3,24 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const projectRoot = new URL("../", import.meta.url);
+const uiSourceFiles = [
+  "app/page.tsx",
+  "app/components/app-footer.tsx",
+  "app/components/app-header.tsx",
+  "app/components/app-modals.tsx",
+  "app/components/empty-family-record.tsx",
+  "app/components/family-panel.tsx",
+  "app/components/medical-record.tsx",
+  "app/components/relative-form.tsx",
+  "hooks/use-family-store.ts",
+];
+
+async function readUiSource() {
+  const sources = await Promise.all(
+    uiSourceFiles.map((path) => readFile(new URL(path, projectRoot), "utf8")),
+  );
+  return sources.join("\n");
+}
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -46,14 +64,14 @@ test("server-renders the FamilyCare dashboard", async () => {
 
 test("prioriza o modo emergência e mantém ações destrutivas em menu secundário", async () => {
   const [page, css, modal] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
-    readFile(new URL("app/modal.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/components/modal.tsx", projectRoot), "utf8"),
   ]);
 
   assert.match(page, /className=\{emergencyMode \? "emergency-top-button active" : "emergency-top-button"\}/);
   assert.match(page, /aria-pressed=\{emergencyMode\}/);
-  assert.match(page, /disabled=\{!selected\}/);
+  assert.match(page, /disabled=\{!hasSelectedRelative\}/);
   assert.match(page, /Sair do modo emergência/);
   assert.match(page, /className="add-relative-compact"/);
   assert.match(page, /aria-label="Adicionar familiar"/);
@@ -70,10 +88,10 @@ test("prioriza o modo emergência e mantém ações destrutivas em menu secundá
   assert.doesNotMatch(css, /\.emergency-active \.medications-section[^}]*display:\s*none/);
   assert.match(page, /Medicamentos em uso/);
   assert.match(page, /Nenhum medicamento informado\./);
-  assert.match(page, /!emergencyMode && <div className="record-actions">/);
+  assert.match(page, /!emergencyMode && \([\s\S]*<div className="record-actions">/);
   assert.match(page, /id="quick-family-select"/);
   assert.match(page, /Selecionar familiar no modo emergência/);
-  assert.match(page, /onChange=\{\(event\) => setSelectedId\(event\.target\.value\)\}/);
+  assert.match(page, /onChange=\{\(event\) => onSelectRelative\(event\.target\.value\)\}/);
   assert.match(page, /todos os dados de .*incluindo medicamentos/i);
   assert.match(css, /\.app-intro \{[^}]*padding: 16px 0 0/);
   assert.doesNotMatch(css, /\.hero \{ min-height: 246px/);
@@ -84,11 +102,11 @@ test("prioriza o modo emergência e mantém ações destrutivas em menu secundá
 
 test("modal reutilizável gerencia foco, Escape, backdrop, isolamento e rolagem", async () => {
   const [page, modal] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
-    readFile(new URL("app/modal.tsx", projectRoot), "utf8"),
+    readUiSource(),
+    readFile(new URL("app/components/modal.tsx", projectRoot), "utf8"),
   ]);
 
-  assert.equal((page.match(/<Modal /g) ?? []).length, 3);
+  assert.equal((page.match(/<Modal\s/g) ?? []).length, 3);
   assert.match(page, /initialFocusSelector='input\[name="name"\]'/);
   assert.match(page, /initialFocusSelector="\[data-modal-primary\]"/);
   assert.doesNotMatch(page, /autoFocus/);
@@ -104,7 +122,7 @@ test("modal reutilizável gerencia foco, Escape, backdrop, isolamento e rolagem"
 
 test("mantém muitos familiares em lista vertical responsiva e nomes longos contidos", async () => {
   const [page, css] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
@@ -119,32 +137,32 @@ test("mantém muitos familiares em lista vertical responsiva e nomes longos cont
 
 test("oferece troca rápida sticky na ficha e no modo emergência sem ações de edição", async () => {
   const [page, css] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
   assert.match(page, /className="quick-family-switcher"/);
   assert.match(page, /value=\{selected\.id\}/);
-  assert.match(page, /family\.map\(\(person\) => <option/);
+  assert.match(page, /family\.map\(\(person\) => \([\s\S]*<option/);
   assert.match(page, /Familiar em emergência/);
   assert.match(css, /\.emergency-active \.quick-family-switcher \{[^}]*position: sticky;/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.quick-family-switcher \{ position: sticky;/);
-  assert.match(page, /!emergencyMode && <div className="record-actions">/);
-  assert.match(page, /!emergencyMode && <button className="remove-medication"/);
+  assert.match(page, /!emergencyMode && \([\s\S]*<div className="record-actions">/);
+  assert.match(page, /!emergencyMode && \([\s\S]*className="remove-medication"/);
 });
 
 test("mantém armazenamento como informação global e preserva o estado vazio", async () => {
-  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  const page = await readUiSource();
 
   assert.doesNotMatch(page, /Dados salvos neste dispositivo/);
   assert.match(page, /Seus dados permanecem apenas neste dispositivo nesta versão\./);
   assert.match(page, /Nenhum familiar cadastrado/);
-  assert.match(page, /<button className="submit-button" type="button" onClick=\{openAddRelative\}>Adicionar familiar<\/button>/);
+  assert.match(page, /<button className="submit-button" type="button" onClick=\{onAddRelative\}>[\s\S]*Adicionar familiar[\s\S]*<\/button>/);
 });
 
 test("mantém nome acessível completo e rótulo curto de emergência em 320 px", async () => {
   const [page, css] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
@@ -160,7 +178,7 @@ test("ships production metadata without starter artifacts", async () => {
   const response = await render();
   const html = await response.text();
   const [page, layout, packageJson] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readUiSource(),
     readFile(new URL("app/layout.tsx", projectRoot), "utf8"),
     readFile(new URL("package.json", projectRoot), "utf8"),
   ]);

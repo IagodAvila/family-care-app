@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, updateMedicationInList, updateRelative, validateBirthDate } from "../app/family-data.mjs";
+import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, updateMedicationInList, updateRelative, validateBirthDate } from "../lib/family-data.mjs";
 
 function formData(values) {
   const data = new FormData();

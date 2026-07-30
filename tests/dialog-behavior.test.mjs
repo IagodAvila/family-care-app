@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getFocusableElements, isDirectBackdropClick, lockDocumentScroll, trapDialogFocus } from "../app/dialog-behavior.mjs";
+import { getFocusableElements, isDirectBackdropClick, lockDocumentScroll, trapDialogFocus } from "../lib/dialog-behavior.mjs";
 import { familyFixture } from "./fixtures/family.mjs";
 
 function focusable(name) {
