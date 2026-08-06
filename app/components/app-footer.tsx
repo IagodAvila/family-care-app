@@ -6,7 +6,7 @@ export function AppFooter({ onOpenPrivacy }: AppFooterProps) {
   return (
     <footer>
       <span>familycare</span>
-      <p>Seus dados permanecem apenas neste dispositivo nesta versão.</p>
+      <p>Seus dados ficam protegidos na sua conta, atrás de login.</p>
       <button type="button" onClick={onOpenPrivacy}>
         Como protegemos seus dados
       </button>

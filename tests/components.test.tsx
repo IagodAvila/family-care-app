@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import Home from "@/app/page";
 import { Modal } from "@/app/components/modal";
 import type { Relative } from "@/types/family";
+import { createFakeFamilyBackend } from "./helpers/fake-family-backend";
 
-const STORAGE_KEY = "familycare-family";
+const LEGACY_STORAGE_KEY = "familycare-family";
 
 function ModalHarness() {
   const [open, setOpen] = useState(false);
@@ -32,7 +33,7 @@ function ModalHarness() {
 }
 
 async function openRelativeForm(user: ReturnType<typeof userEvent.setup>) {
-  const buttons = screen.getAllByRole("button", { name: "Adicionar familiar" });
+  const buttons = await screen.findAllByRole("button", { name: "Adicionar familiar" });
   await user.click(buttons[0]);
   return screen.getByRole("dialog", { name: "Adicionar familiar" });
 }
@@ -53,7 +54,7 @@ async function fillRequiredRelativeFields(
 
 function storedRelative(overrides: Partial<Relative>): Relative {
   return {
-    id: "relative-1",
+    id: overrides.id ?? "relative-1",
     name: "Ana Souza",
     relation: "Mãe",
     birthDate: "1970-05-10",
@@ -67,6 +68,21 @@ function storedRelative(overrides: Partial<Relative>): Relative {
   };
 }
 
+/**
+ * Renders `<Home />` against an in-memory fake of the `/api/**` routes
+ * (see helpers/fake-family-backend.ts) instead of `localStorage` — data now
+ * lives on the server, so every test needs *something* answering `fetch`.
+ * Waits for the authenticated shell to mount before handing control back,
+ * since that first render is always the "Carregando…" state.
+ */
+async function renderApp(seedRelatives: readonly Relative[] = []) {
+  const backend = createFakeFamilyBackend(seedRelatives);
+  vi.stubGlobal("fetch", backend.fetch);
+  render(<Home />);
+  await screen.findByLabelText("Navegação principal");
+  return backend;
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
@@ -75,6 +91,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe("Modal", () => {
@@ -113,7 +130,7 @@ describe("Modal", () => {
 describe("fluxos críticos do FamilyCare", () => {
   test("valida a data e cadastra familiar com múltiplos medicamentos", async () => {
     const user = userEvent.setup();
-    render(<Home />);
+    const backend = await renderApp([]);
     const dialog = await openRelativeForm(user);
 
     await fillRequiredRelativeFields(user, dialog, {
@@ -153,18 +170,17 @@ describe("fluxos críticos do FamilyCare", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Salvar familiar" }));
 
-    expect(screen.getByRole("heading", { name: "Ana Souza", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Ana Souza", level: 2 })).toBeTruthy();
     expect(screen.getByText("Losartana")).toBeTruthy();
     expect(screen.getByText("Vitamina D")).toBeTruthy();
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-      expect(stored).toHaveLength(1);
-      expect(stored[0].medications).toHaveLength(2);
+      expect(backend.getRelatives()).toHaveLength(1);
+      expect(backend.getRelatives()[0].medications).toHaveLength(2);
     });
   });
 
-  test("restaura localStorage antigo, troca familiar e ativa o modo emergência", async () => {
-    const storedFamily = [
+  test("oferece importar dados salvos de uma versão anterior, troca familiar e ativa o modo emergência", async () => {
+    const legacyFamily = [
       storedRelative({
         medications: [{
           name: "Vitamina D",
@@ -181,14 +197,20 @@ describe("fluxos críticos do FamilyCare", () => {
         color: "#8a6fbc",
       }),
     ];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(legacyFamily));
     const user = userEvent.setup();
+    // The server family starts empty — that's what makes the import offer show up.
+    const backend = await renderApp([]);
 
-    render(<Home />);
+    const importDialog = await screen.findByRole("dialog", {
+      name: "Importar dados salvos neste navegador?",
+    });
+    await user.click(within(importDialog).getByRole("button", { name: "Importar" }));
 
-    expect(await screen.findByRole("heading", { name: "Ana Souza", level: 2 }))
-      .toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Ana Souza", level: 2 })).toBeTruthy();
     expect(screen.getByText("Semanal")).toBeTruthy();
+    await waitFor(() => expect(backend.getRelatives()).toHaveLength(2));
+    expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /Bruno Souza/ }));
     expect(screen.getByRole("heading", { name: "Bruno Souza", level: 2 })).toBeTruthy();
@@ -199,22 +221,18 @@ describe("fluxos críticos do FamilyCare", () => {
     const emergencySwitcher = screen.getByRole("combobox", {
       name: "Selecionar familiar no modo emergência",
     });
-    await user.selectOptions(emergencySwitcher, "relative-1");
+    const anaOption = within(emergencySwitcher).getByText(/Ana Souza/);
+    await user.selectOptions(emergencySwitcher, anaOption);
 
     expect(screen.getByRole("heading", { name: "Ana Souza", level: 2 })).toBeTruthy();
     expect(screen.getByText("Medicamentos em uso")).toBeTruthy();
-    await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-      expect(stored[0].medications[0].orientation).toBe("Semanal");
-      expect(stored[0].medications[0].schedule).toBe("Semanal");
-    });
   });
 
   test("alterna entre tema claro e escuro ao clicar no botão sol/lua", async () => {
     const user = userEvent.setup();
-    render(<Home />);
+    await renderApp([]);
 
-    const toggle = screen.getByRole("button", { name: "Alternar entre tema claro e escuro" });
+    const toggle = await screen.findByRole("button", { name: "Alternar entre tema claro e escuro" });
 
     await user.click(toggle);
     expect(document.documentElement.dataset.theme).toBe("dark");
@@ -226,10 +244,8 @@ describe("fluxos críticos do FamilyCare", () => {
   });
 
   test("exclui familiar somente após confirmar no diálogo em duas etapas", async () => {
-    const storedFamily = [storedRelative({})];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    const backend = await renderApp([storedRelative({})]);
     const user = userEvent.setup();
-    render(<Home />);
 
     await screen.findByRole("heading", { name: "Ana Souza", level: 2 });
     await user.click(screen.getByRole("button", { name: "Mais opções para este familiar" }));
@@ -250,18 +266,15 @@ describe("fluxos críticos do FamilyCare", () => {
       expect(screen.queryByRole("heading", { name: "Ana Souza", level: 2 })).toBeNull();
     });
     await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-      expect(stored).toHaveLength(0);
+      expect(backend.getRelatives()).toHaveLength(0);
     });
   });
 
   test("remove medicamento somente após confirmar no diálogo", async () => {
-    const storedFamily = [storedRelative({
+    await renderApp([storedRelative({
       medications: [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }],
-    })];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    })]);
     const user = userEvent.setup();
-    render(<Home />);
 
     await screen.findByText("Losartana");
     await user.click(screen.getByRole("button", { name: "Remover Losartana" }));
@@ -279,12 +292,10 @@ describe("fluxos críticos do FamilyCare", () => {
   });
 
   test("edita familiar e substitui a lista de medicamentos existente", async () => {
-    const storedFamily = [storedRelative({
+    const backend = await renderApp([storedRelative({
       medications: [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }],
-    })];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    })]);
     const user = userEvent.setup();
-    render(<Home />);
 
     await screen.findByText("Losartana");
     await user.click(screen.getByRole("button", { name: "Editar familiar" }));
@@ -298,15 +309,15 @@ describe("fluxos críticos do FamilyCare", () => {
     await user.click(within(dialog).getByRole("button", { name: "Adicionar medicamento" }));
     await user.click(within(dialog).getByRole("button", { name: "Salvar alterações" }));
 
-    expect(screen.getByText("Vitamina D")).toBeTruthy();
+    expect(await screen.findByText("Vitamina D")).toBeTruthy();
+    expect(screen.queryByText("Losartana")).toBeNull();
     await waitFor(() => {
-      expect(screen.queryByText("Losartana")).toBeNull();
-    });
-    await waitFor(() => {
-      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-      expect(stored[0].medications).toEqual([
-        { name: "Vitamina D", dosage: "1 dose", orientation: "" },
-      ]);
+      expect(backend.getRelatives()[0].medications).toHaveLength(1);
+      expect(backend.getRelatives()[0].medications[0]).toMatchObject({
+        name: "Vitamina D",
+        dosage: "1 dose",
+        orientation: "",
+      });
     });
   });
 });

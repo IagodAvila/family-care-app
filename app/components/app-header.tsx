@@ -1,8 +1,11 @@
+import type { CurrentUser } from "@/hooks/use-family-store";
 import { ThemeToggle } from "./theme-toggle";
 
 type AppHeaderProps = {
   emergencyMode: boolean;
   hasSelectedRelative: boolean;
+  user: CurrentUser | null;
+  onLogout: () => void;
   onOpenPrivacy: () => void;
   onToggleEmergency: () => void;
 };
@@ -10,6 +13,8 @@ type AppHeaderProps = {
 export function AppHeader({
   emergencyMode,
   hasSelectedRelative,
+  user,
+  onLogout,
   onOpenPrivacy,
   onToggleEmergency,
 }: AppHeaderProps) {
@@ -43,6 +48,15 @@ export function AppHeader({
       </button>
 
       <ThemeToggle />
+
+      {user && (
+        <div className="user-menu">
+          <span className="user-email" title={user.emailNormalized}>
+            {user.displayName ?? user.emailNormalized}
+          </span>
+          <button type="button" onClick={onLogout}>Sair</button>
+        </div>
+      )}
 
       {!hasSelectedRelative && (
         <span className="sr-only" id="emergency-unavailable">

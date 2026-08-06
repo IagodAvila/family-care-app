@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, removeLegacyStarterFamily, removeMedicationFromList, restoreFamily, updateMedicationInList, updateRelative, validateBirthDate } from "../lib/family-data.ts";
+import { addMedicationToList, applyDateMask, createMedication, createRelative, deleteRelative, displayDateToInternal, internalDateToDisplay, normalizeMedication, removeLegacyStarterFamily, removeMedicationFromList, restoreFamily, toMedicationInput, toRelativeInput, updateMedicationInList, updateRelative, validateBirthDate } from "../lib/family-data.ts";
 
 function formData(values) {
   const data = new FormData();
@@ -114,4 +114,28 @@ test("exclui somente o familiar selecionado e remove dados fictícios antigos", 
   const secondRelative = { ...originalRelative, id: "relative-2" };
   assert.deepEqual(deleteRelative([originalRelative, secondRelative], originalRelative.id), [secondRelative]);
   assert.deepEqual(removeLegacyStarterFamily([{ ...originalRelative, id: "antonio" }, originalRelative]), [originalRelative]);
+});
+
+test("normalizeMedication preserva id/version de um medicamento já salvo no servidor", () => {
+  const persisted = { id: "med-1", version: 3, name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" };
+  assert.deepEqual(normalizeMedication(persisted), persisted);
+  // A brand new medication (never synced) has neither field, and shouldn't gain them.
+  const draft = normalizeMedication({ name: "Vitamina D", dosage: "", orientation: "" });
+  assert.equal("id" in draft, false);
+  assert.equal("version" in draft, false);
+});
+
+test("toMedicationInput/toRelativeInput moldam os dados no formato esperado por FamilyCareDataService", () => {
+  const medication = { id: "med-1", version: 2, name: "Losartana", dosage: "50 mg", orientation: "Pela manhã", frequency: 2, schedules: ["08:00", "20:00"] };
+  assert.deepEqual(toMedicationInput(medication), {
+    name: "Losartana", dosage: "50 mg", orientation: "Pela manhã", frequency: 2, schedules: ["08:00", "20:00"], legacySchedule: undefined,
+  });
+
+  const input = toRelativeInput({
+    name: "Ana Lima", relation: "Avó", birthDate: "1970-05-10", bloodType: "A-",
+    conditions: ["Asma"], allergies: [], notes: "", color: "#277f7b",
+    medications: [medication, { name: "", dosage: "", orientation: "" }],
+  });
+  assert.equal(input.medications.length, 1);
+  assert.equal(input.medications[0].name, "Losartana");
 });

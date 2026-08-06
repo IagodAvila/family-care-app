@@ -4,22 +4,32 @@ import { useState } from "react";
 import { AppFooter } from "./components/app-footer";
 import { AppHeader } from "./components/app-header";
 import { AppModals } from "./components/app-modals";
+import { ConfirmDialog } from "./components/confirm-dialog";
 import { EmptyFamilyRecord } from "./components/empty-family-record";
 import { FamilyPanel } from "./components/family-panel";
+import { LoginScreen } from "./components/login-screen";
 import { MedicalRecord } from "./components/medical-record";
 import { useFamilyStore } from "@/hooks/use-family-store";
 import type { Medication } from "@/types/family";
 
 export default function Home() {
   const {
+    authState,
+    user,
     family,
     justSaved,
+    error,
+    clearError,
     selected,
     selectRelative,
     saveRelative,
     deleteSelectedRelative,
     addMedication,
     deleteMedication,
+    pendingLocalImport,
+    confirmLocalImport,
+    dismissLocalImport,
+    logout,
   } = useFamilyStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showRelativeForm, setShowRelativeForm] = useState(false);
@@ -47,8 +57,8 @@ export default function Home() {
     setEditingId(null);
   }
 
-  function handleSaveRelative(data: FormData, medications: Medication[]) {
-    saveRelative(editingId, data, medications);
+  async function handleSaveRelative(data: FormData, medications: Medication[]) {
+    await saveRelative(editingId, data, medications);
     closeRelativeForm();
   }
 
@@ -56,15 +66,15 @@ export default function Home() {
     setShowDeleteRelativeConfirm(true);
   }
 
-  function confirmDeleteRelative() {
+  async function confirmDeleteRelative() {
     setShowDeleteRelativeConfirm(false);
-    const familyBecameEmpty = deleteSelectedRelative();
+    const familyBecameEmpty = await deleteSelectedRelative();
     if (familyBecameEmpty) setEmergencyMode(false);
   }
 
-  function confirmRemoveMedication() {
+  async function confirmRemoveMedication() {
     if (pendingMedicationIndex === null) return;
-    deleteMedication(pendingMedicationIndex);
+    await deleteMedication(pendingMedicationIndex);
     setPendingMedicationIndex(null);
   }
 
@@ -72,17 +82,31 @@ export default function Home() {
     if (selected) setEmergencyMode((current) => !current);
   }
 
+  if (authState === "loading") {
+    return (
+      <main className="app app-loading">
+        <p>Carregando…</p>
+      </main>
+    );
+  }
+
+  if (authState === "needs-login") {
+    return <LoginScreen error={error} />;
+  }
+
   return (
     <main className={emergencyMode ? "app emergency-active" : "app"}>
       <AppHeader
         emergencyMode={emergencyMode}
         hasSelectedRelative={Boolean(selected)}
+        user={user}
+        onLogout={logout}
         onOpenPrivacy={() => setShowPrivacy(true)}
         onToggleEmergency={toggleEmergencyMode}
       />
 
       <section className="app-intro" id="inicio">
-        <p>Dados de saúde da família, organizados neste dispositivo.</p>
+        <p>Dados de saúde da família, sincronizados com segurança na sua conta.</p>
       </section>
 
       <section className="workspace" id="familiares">
@@ -115,6 +139,24 @@ export default function Home() {
         <div className="save-toast" role="status" aria-live="polite">
           Alterações salvas
         </div>
+      )}
+
+      {error && (
+        <div className="save-toast error-toast" role="alert">
+          {error}
+          <button type="button" aria-label="Fechar aviso" onClick={clearError}>×</button>
+        </div>
+      )}
+
+      {pendingLocalImport && (
+        <ConfirmDialog
+          titleId="import-local-title"
+          title="Importar dados salvos neste navegador?"
+          description={`Encontramos ${pendingLocalImport.length} familiar(es) salvos neste navegador de uma versão anterior do FamilyCare. Deseja importá-los para a sua conta? Os dados atuais deste navegador não serão apagados até a importação ser confirmada.`}
+          confirmLabel="Importar"
+          onCancel={dismissLocalImport}
+          onConfirm={confirmLocalImport}
+        />
       )}
 
       <AppModals

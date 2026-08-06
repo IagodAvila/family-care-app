@@ -16,7 +16,7 @@ type AppModalsProps = {
   showMedicationForm: boolean;
   showPrivacy: boolean;
   showRelativeForm: boolean;
-  onAddMedication: (data: FormData) => boolean;
+  onAddMedication: (data: FormData) => Promise<boolean>;
   onCancelDeleteRelative: () => void;
   onCancelRemoveMedication: () => void;
   onCloseMedicationForm: () => void;
@@ -49,9 +49,9 @@ export function AppModals({
   const pendingMedication = pendingMedicationIndex !== null
     ? selected?.medications[pendingMedicationIndex]
     : undefined;
-  function addMedication(event: FormEvent<HTMLFormElement>) {
+  async function addMedication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const wasAdded = onAddMedication(new FormData(event.currentTarget));
+    const wasAdded = await onAddMedication(new FormData(event.currentTarget));
     if (wasAdded) onCloseMedicationForm();
   }
 
@@ -123,12 +123,13 @@ export function AppModals({
           <div className="privacy-symbol">⌂</div>
           <p className="eyebrow">Privacidade desde o início</p>
           <h2 id="privacy-title">
-            Nesta demonstração, os dados ficam no seu aparelho.
+            Seus dados ficam protegidos na sua conta.
           </h2>
           <p>
-            As informações cadastradas são salvas somente no navegador deste
-            dispositivo. Uma versão de produção deverá incluir acesso protegido,
-            criptografia e consentimento de cada familiar.
+            As informações cadastradas são salvas com segurança, atrás do seu
+            login com Google. Nesta versão, apenas você tem acesso a elas;
+            compartilhar o acesso com outros familiares está previsto para uma
+            etapa futura.
           </p>
           <button
             className="submit-button"

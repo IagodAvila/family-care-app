@@ -122,6 +122,12 @@ export function normalizeMedication(value: unknown): Medication {
     ...normalized,
   };
 
+  // Carried through (not re-derived) so editing an already-persisted
+  // medication in place keeps its server identity instead of looking like
+  // a brand new one — see lib/family-data.ts's `toMedicationInput` callers.
+  if (typeof medication.id === "string") compatibleMedication.id = medication.id;
+  if (typeof medication.version === "number") compatibleMedication.version = medication.version;
+
   if (schedules.length) compatibleMedication.schedules = schedules;
   if (legacySchedule) compatibleMedication.schedule = legacySchedule;
   if (typeof medication.frequency === "number" && Number.isFinite(medication.frequency)) {
@@ -129,6 +135,46 @@ export function normalizeMedication(value: unknown): Medication {
   }
 
   return compatibleMedication;
+}
+
+/** Client `Medication` → the shape `FamilyCareDataService`'s create/update methods expect. */
+export function toMedicationInput(medication: Medication) {
+  return {
+    name: medication.name,
+    dosage: medication.dosage,
+    orientation: medication.orientation,
+    frequency: medication.frequency,
+    schedules: medication.schedules,
+    legacySchedule: medication.schedule,
+  };
+}
+
+/** Client relative fields → the shape `FamilyCareDataService.createRelative` expects. */
+export function toRelativeInput(relative: {
+  name: string;
+  relation: string;
+  birthDate: string;
+  bloodType: string;
+  conditions: string[];
+  allergies: string[];
+  notes: string;
+  color?: string;
+  medications?: readonly Medication[];
+}) {
+  return {
+    name: relative.name,
+    relation: relative.relation,
+    birthDate: relative.birthDate,
+    bloodType: relative.bloodType,
+    conditions: relative.conditions,
+    allergies: relative.allergies,
+    notes: relative.notes,
+    color: relative.color,
+    medications: relative.medications
+      ?.map(normalizeMedication)
+      .filter((medication) => medication.name)
+      .map(toMedicationInput),
+  };
 }
 
 export function createMedication(data: FormData, nameField = "name"): Medication {

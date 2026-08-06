@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: base,
     title: "FamilyCare | Saúde da família ao seu alcance",
-    description: "Dados de saúde da família organizados neste dispositivo para consulta rápida.",
+    description: "Dados de saúde da família sincronizados com segurança para consulta rápida.",
     openGraph: {
       title: "FamilyCare | Dados de saúde da família",
       description: "Dados de saúde da família organizados para consulta rápida.",

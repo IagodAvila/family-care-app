@@ -1,0 +1,11 @@
+# Copy to .dev.vars (gitignored) and fill in real values for local development.
+# In production these are set with `wrangler secret put <NAME>`, not committed.
+
+# Google Cloud Console → APIs & Services → Credentials → OAuth client ID
+# (Web application). Authorized redirect URI: http://localhost:3000/api/auth/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Any long random string — signs the session/OAuth-handshake cookies.
+# Generate one with: openssl rand -base64 32
+SESSION_SECRET=

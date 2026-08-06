@@ -45,7 +45,7 @@ async function render() {
   );
 }
 
-test("server-renders the FamilyCare dashboard", async () => {
+test("server-renders the FamilyCare loading shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -53,15 +53,14 @@ test("server-renders the FamilyCare dashboard", async () => {
   const html = await response.text();
   assert.match(html, /<html lang="pt-BR">/i);
   assert.match(html, /<title>FamilyCare \| Saúde da família ao seu alcance<\/title>/i);
-  assert.match(html, /<main class="app">/i);
-  assert.match(html, /Modo emergência/i);
-  assert.match(html, /Dados de saúde da família, organizados neste dispositivo\./i);
+  // Family data now lives in D1 and loads client-side after checking the
+  // session (see hooks/use-family-store.ts), so a request with no cookies
+  // and no JS execution — this raw SSR pass — can only ever render the
+  // loading shell; the dashboard chrome mounts after hydration.
+  assert.match(html, /<main class="app app-loading">/i);
+  assert.match(html, /Carregando/i);
   assert.doesNotMatch(html, /Quem você ama, sempre bem cuidado|Informação certa, na hora que importa/i);
-  assert.match(html, /Nenhum familiar cadastrado/i);
-  assert.match(html, /Comece sua rede de cuidados/i);
-  assert.match(html, /Adicionar familiar/i);
   assert.doesNotMatch(html, /Antônio Almeida|Lúcia Almeida|Marina Almeida/i);
-  assert.match(html, /aria-label="Navegação principal"/i);
 });
 
 test("prioriza o modo emergência e mantém ações destrutivas em menu secundário", async () => {
@@ -160,7 +159,7 @@ test("mantém armazenamento como informação global e preserva o estado vazio",
   const page = await readUiSource();
 
   assert.doesNotMatch(page, /Dados salvos neste dispositivo/);
-  assert.match(page, /Seus dados permanecem apenas neste dispositivo nesta versão\./);
+  assert.match(page, /Seus dados ficam protegidos na sua conta, atrás de login\./);
   assert.match(page, /Nenhum familiar cadastrado/);
   assert.match(page, /<button className="submit-button" type="button" onClick=\{onAddRelative\}>[\s\S]*Adicionar familiar[\s\S]*<\/button>/);
 });
@@ -205,7 +204,7 @@ test("ships production metadata without starter artifacts", async () => {
     readFile(new URL("package.json", projectRoot), "utf8"),
   ]);
 
-  assert.match(html, /<meta name="description" content="Dados de saúde da família organizados/i);
+  assert.match(html, /<meta name="description" content="Dados de saúde da família sincronizados/i);
   assert.match(html, /<meta property="og:title" content="FamilyCare/i);
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Building your site/i);

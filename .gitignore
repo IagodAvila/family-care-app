@@ -34,6 +34,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Wrangler's local-dev secrets file — separate convention from .env*, holds
+# real Google OAuth/session secrets, must never be committed.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
 # vercel
 .vercel
 
