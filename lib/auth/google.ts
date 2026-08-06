@@ -17,6 +17,7 @@ export type GoogleProfile = {
   email: string;
   emailVerified: boolean;
   name: string | null;
+  picture: string | null;
 };
 
 export function generateState(): string {
@@ -92,6 +93,7 @@ export async function fetchGoogleProfile(accessToken: string): Promise<GooglePro
     email?: string;
     email_verified?: boolean;
     name?: string;
+    picture?: string;
   };
   if (!data.sub || !data.email) throw new Error("Perfil do Google incompleto.");
 
@@ -100,5 +102,6 @@ export async function fetchGoogleProfile(accessToken: string): Promise<GooglePro
     email: data.email,
     emailVerified: Boolean(data.email_verified),
     name: data.name ?? null,
+    picture: data.picture ?? null,
   };
 }

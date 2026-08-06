@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppFooter } from "./components/app-footer";
 import { AppHeader } from "./components/app-header";
 import { AppModals } from "./components/app-modals";
@@ -9,6 +9,7 @@ import { EmptyFamilyRecord } from "./components/empty-family-record";
 import { FamilyPanel } from "./components/family-panel";
 import { LoginScreen } from "./components/login-screen";
 import { MedicalRecord } from "./components/medical-record";
+import { MembersPanel } from "./components/members-panel";
 import { useFamilyStore } from "@/hooks/use-family-store";
 import type { Medication } from "@/types/family";
 
@@ -16,10 +17,12 @@ export default function Home() {
   const {
     authState,
     user,
+    familyId,
     family,
     justSaved,
     error,
     clearError,
+    reportError,
     selected,
     selectRelative,
     saveRelative,
@@ -35,9 +38,30 @@ export default function Home() {
   const [showRelativeForm, setShowRelativeForm] = useState(false);
   const [showMedicationForm, setShowMedicationForm] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [showDeleteRelativeConfirm, setShowDeleteRelativeConfirm] = useState(false);
   const [pendingMedicationIndex, setPendingMedicationIndex] = useState<number | null>(null);
   const [emergencyMode, setEmergencyMode] = useState(false);
+  const [justJoinedFamily, setJustJoinedFamily] = useState(false);
+
+  // Landing here from an invitation link (see app/convite/[token]/page.tsx),
+  // which redirects to `/?invited=1` or `/?inviteError=...` — surface the
+  // result once, then drop it from the URL so a refresh doesn't repeat it.
+  /* eslint-disable react-hooks/set-state-in-effect -- Reads a one-time invite-result flag from the URL on mount. */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteError = params.get("inviteError");
+    const invited = params.get("invited");
+    if (!inviteError && !invited) return;
+
+    if (inviteError) reportError(inviteError);
+    if (invited) {
+      setJustJoinedFamily(true);
+      window.setTimeout(() => setJustJoinedFamily(false), 4000);
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [reportError]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const editingRelative = family.find((person) => person.id === editingId);
 
@@ -101,6 +125,7 @@ export default function Home() {
         hasSelectedRelative={Boolean(selected)}
         user={user}
         onLogout={logout}
+        onOpenMembers={() => setShowMembers(true)}
         onOpenPrivacy={() => setShowPrivacy(true)}
         onToggleEmergency={toggleEmergencyMode}
       />
@@ -141,6 +166,12 @@ export default function Home() {
         </div>
       )}
 
+      {justJoinedFamily && (
+        <div className="save-toast" role="status" aria-live="polite">
+          Convite aceito! Você agora faz parte da família.
+        </div>
+      )}
+
       {error && (
         <div className="save-toast error-toast" role="alert">
           {error}
@@ -156,6 +187,15 @@ export default function Home() {
           confirmLabel="Importar"
           onCancel={dismissLocalImport}
           onConfirm={confirmLocalImport}
+        />
+      )}
+
+      {showMembers && familyId && user && (
+        <MembersPanel
+          familyId={familyId}
+          currentUserId={user.id}
+          onClose={() => setShowMembers(false)}
+          onError={reportError}
         />
       )}
 

@@ -1,11 +1,13 @@
 import type { CurrentUser } from "@/hooks/use-family-store";
 import { ThemeToggle } from "./theme-toggle";
+import { UserMenu } from "./user-menu";
 
 type AppHeaderProps = {
   emergencyMode: boolean;
   hasSelectedRelative: boolean;
   user: CurrentUser | null;
   onLogout: () => void;
+  onOpenMembers: () => void;
   onOpenPrivacy: () => void;
   onToggleEmergency: () => void;
 };
@@ -15,6 +17,7 @@ export function AppHeader({
   hasSelectedRelative,
   user,
   onLogout,
+  onOpenMembers,
   onOpenPrivacy,
   onToggleEmergency,
 }: AppHeaderProps) {
@@ -27,6 +30,7 @@ export function AppHeader({
 
       <nav className="desktop-nav" aria-label="Navegação principal">
         <a className="active" href="#familiares">Familiares</a>
+        <button type="button" onClick={onOpenMembers}>Membros</button>
         <button type="button" onClick={onOpenPrivacy}>Privacidade</button>
       </nav>
 
@@ -39,6 +43,7 @@ export function AppHeader({
         aria-label={emergencyMode ? "Sair do modo emergência" : "Ativar modo emergência"}
         aria-describedby={!hasSelectedRelative ? "emergency-unavailable" : undefined}
       >
+        <span className="emergency-icon" aria-hidden="true">⚠</span>
         {emergencyMode ? (
           <>
             <span className="emergency-label-full">Sair do modo emergência</span>
@@ -49,14 +54,7 @@ export function AppHeader({
 
       <ThemeToggle />
 
-      {user && (
-        <div className="user-menu">
-          <span className="user-email" title={user.emailNormalized}>
-            {user.displayName ?? user.emailNormalized}
-          </span>
-          <button type="button" onClick={onLogout}>Sair</button>
-        </div>
-      )}
+      {user && <UserMenu user={user} onLogout={onLogout} />}
 
       {!hasSelectedRelative && (
         <span className="sr-only" id="emergency-unavailable">

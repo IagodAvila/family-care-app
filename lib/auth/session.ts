@@ -17,9 +17,16 @@ export async function readSessionFromRequest(
   request: Request,
   secret: string,
 ): Promise<SessionPayload | null> {
-  const token = parseCookie(request.headers.get("Cookie"), SESSION_COOKIE_NAME);
-  if (!token) return null;
-  return verifyValue<SessionPayload>(token, secret);
+  return readSessionFromCookieValue(parseCookie(request.headers.get("Cookie"), SESSION_COOKIE_NAME), secret);
+}
+
+/** For server components (e.g. app/convite/[token]/page.tsx), which read cookies via `next/headers` instead of a `Request`. */
+export async function readSessionFromCookieValue(
+  cookieValue: string | undefined | null,
+  secret: string,
+): Promise<SessionPayload | null> {
+  if (!cookieValue) return null;
+  return verifyValue<SessionPayload>(cookieValue, secret);
 }
 
 export function buildSessionSetCookie(value: string, secure: boolean): string {

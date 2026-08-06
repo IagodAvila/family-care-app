@@ -48,3 +48,8 @@ export type UpdateRelativeInput = Omit<RelativeInput, "medications"> & {
 export type UpdateMedicationInput = MedicationInput & {
   expectedVersion: number;
 };
+
+export type CreateInvitationInput = {
+  emailNormalized: string;
+  role: Exclude<FamilyRole, "admin">;
+};

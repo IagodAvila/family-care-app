@@ -12,6 +12,7 @@ import type {
   AuthenticatedUserContext,
   AuthorizedFamilyContext,
   CreateFamilyInput,
+  CreateInvitationInput,
   MedicationInput,
   RelativeInput,
   UpdateMedicationInput,
@@ -23,20 +24,27 @@ import {
   auditEvents,
   families,
   familyMembers,
+  invitations,
   medications,
   relatives,
   users,
   type FamilyRole,
+  type InvitationRow,
   type MedicationRow,
   type RelativeRow,
 } from "../schema.ts";
+import { generateToken, hashToken } from "../token.ts";
 import {
+  validateEmail,
   validateExpectedVersion,
   validateFamilyName,
   validateMedicationInput,
   validateRelativeInput,
   validateRole,
 } from "../validation.ts";
+
+/** Invitation links expire after 7 days (docs/architecture.md leaves the exact value to product judgment). */
+const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type ServiceOptions = {
   createId?: () => string;
@@ -197,6 +205,28 @@ export class FamilyCareDataService {
       return this.db
         .select()
         .from(familyMembers)
+        .where(eq(familyMembers.familyId, context.familyId))
+        .orderBy(asc(familyMembers.createdAt))
+        .all();
+    });
+  }
+
+  async listMembersWithUsers(context: AuthorizedFamilyContext) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "viewer");
+      return this.db
+        .select({
+          userId: familyMembers.userId,
+          role: familyMembers.role,
+          status: familyMembers.status,
+          joinedAt: familyMembers.joinedAt,
+          revokedAt: familyMembers.revokedAt,
+          emailNormalized: users.emailNormalized,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(familyMembers)
+        .innerJoin(users, eq(users.id, familyMembers.userId))
         .where(eq(familyMembers.familyId, context.familyId))
         .orderBy(asc(familyMembers.createdAt))
         .all();
@@ -388,6 +418,197 @@ export class FamilyCareDataService {
 
       this.requireChange(result);
       return this.requireMember(context.familyId, targetUserId);
+    });
+  }
+
+  async listInvitations(context: AuthorizedFamilyContext) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "admin");
+      return this.db
+        .select()
+        .from(invitations)
+        .where(eq(invitations.familyId, context.familyId))
+        .orderBy(asc(invitations.createdAt))
+        .all();
+    });
+  }
+
+  /** Returns the plaintext `token` too — the only time it's ever available; only its hash is stored. */
+  async createInvitation(
+    context: AuthorizedFamilyContext,
+    input: CreateInvitationInput,
+  ): Promise<{ invitation: InvitationRow; token: string }> {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "admin");
+      const emailNormalized = validateEmail(input.emailNormalized);
+      const role = validateRole(input.role);
+      if (role === "admin") {
+        throw new FamilyCareDataError("INVALID_INPUT");
+      }
+
+      const existingPending = await this.db
+        .select({ id: invitations.id })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.familyId, context.familyId),
+            eq(invitations.emailNormalized, emailNormalized),
+            eq(invitations.status, "pending"),
+          ),
+        )
+        .get();
+      if (existingPending) {
+        throw new FamilyCareDataError("CONFLICT");
+      }
+
+      const invitationId = this.createId();
+      const token = generateToken();
+      const tokenHash = await hashToken(token);
+      const now = this.now();
+
+      await this.db.batch([
+        this.db.insert(invitations).values({
+          id: invitationId,
+          familyId: context.familyId,
+          emailNormalized,
+          role,
+          tokenHash,
+          status: "pending",
+          invitedByUserId: context.userId,
+          expiresAt: now + INVITATION_TTL_MS,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        this.auditQuery({
+          context,
+          action: "invitation.created",
+          targetType: "invitation",
+          targetId: invitationId,
+          metadata: { role },
+          now,
+        }),
+      ]);
+
+      return { invitation: await this.requireInvitation(invitationId), token };
+    });
+  }
+
+  async revokeInvitation(context: AuthorizedFamilyContext, invitationId: string) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "admin");
+      this.validateIdentifier(invitationId);
+      const current = await this.requireInvitation(invitationId, context.familyId);
+      if (current.status !== "pending") {
+        throw new FamilyCareDataError("CONFLICT");
+      }
+      const now = this.now();
+
+      const [result] = await this.db.batch([
+        this.db
+          .update(invitations)
+          .set({ status: "revoked", revokedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(invitations.id, invitationId),
+              eq(invitations.familyId, context.familyId),
+              eq(invitations.status, "pending"),
+            ),
+          ),
+        this.auditQuery({
+          context,
+          action: "invitation.revoked",
+          targetType: "invitation",
+          targetId: invitationId,
+          now,
+        }),
+      ]);
+
+      this.requireChange(result);
+      return this.requireInvitation(invitationId, context.familyId);
+    });
+  }
+
+  /**
+   * Accepts an invitation by its plaintext token. Unlike every other
+   * method here, the caller isn't a family member yet — there's no
+   * `familyId` to authorize against until the invitation itself resolves
+   * one, so this takes a plain `AuthenticatedUserContext`.
+   */
+  async acceptInvitation(context: AuthenticatedUserContext, token: string) {
+    return safely(async () => {
+      this.validateAuthenticatedContext(context);
+      if (!token || token.length > 512) {
+        throw new FamilyCareDataError("INVALID_INPUT");
+      }
+      const tokenHash = await hashToken(token);
+      const now = this.now();
+
+      const invitation = await this.db
+        .select()
+        .from(invitations)
+        .where(and(eq(invitations.tokenHash, tokenHash), eq(invitations.status, "pending")))
+        .get();
+      // Same "not found" for missing/expired: don't let an expired token's
+      // existence be observably different from a bogus one.
+      if (!invitation || invitation.expiresAt <= now) {
+        throw new FamilyCareDataError("NOT_FOUND");
+      }
+
+      const actor = await this.db
+        .select({ id: users.id, emailNormalized: users.emailNormalized })
+        .from(users)
+        .where(and(eq(users.id, context.userId), eq(users.status, "active")))
+        .get();
+      if (!actor) {
+        throw new FamilyCareDataError("NOT_FOUND");
+      }
+      // Invitations are addressed to an identity, not just an inbox: only
+      // the invited email may accept, per docs/architecture.md.
+      if (actor.emailNormalized !== invitation.emailNormalized) {
+        throw new FamilyCareDataError("FORBIDDEN");
+      }
+
+      const familyContext: AuthorizedFamilyContext = { ...context, familyId: invitation.familyId };
+
+      await this.db.batch([
+        this.db
+          .insert(familyMembers)
+          .values({
+            familyId: invitation.familyId,
+            userId: context.userId,
+            role: invitation.role,
+            status: "active",
+            invitedByUserId: invitation.invitedByUserId,
+            joinedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [familyMembers.familyId, familyMembers.userId],
+            set: {
+              role: invitation.role,
+              status: "active",
+              invitedByUserId: invitation.invitedByUserId,
+              joinedAt: now,
+              updatedAt: now,
+              revokedAt: null,
+              revokedByUserId: null,
+            },
+          }),
+        this.db
+          .update(invitations)
+          .set({ status: "accepted", acceptedByUserId: context.userId, acceptedAt: now, updatedAt: now })
+          .where(eq(invitations.id, invitation.id)),
+        this.auditQuery({
+          context: familyContext,
+          action: "invitation.accepted",
+          targetType: "invitation",
+          targetId: invitation.id,
+          now,
+        }),
+      ]);
+
+      return this.requireFamily(familyContext);
     });
   }
 
@@ -847,6 +1068,22 @@ export class FamilyCareDataService {
     if (!result || result.value <= 1) {
       throw new FamilyCareDataError("LAST_ADMIN");
     }
+  }
+
+  private async requireInvitation(invitationId: string, familyId?: string) {
+    const invitation = await this.db
+      .select()
+      .from(invitations)
+      .where(
+        familyId
+          ? and(eq(invitations.id, invitationId), eq(invitations.familyId, familyId))
+          : eq(invitations.id, invitationId),
+      )
+      .get();
+    if (!invitation) {
+      throw new FamilyCareDataError("NOT_FOUND");
+    }
+    return invitation;
   }
 
   private async requireRelative(

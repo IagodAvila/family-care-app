@@ -24,6 +24,7 @@ export const users = sqliteTable(
     authSubject: text("auth_subject").notNull(),
     emailNormalized: text("email_normalized").notNull(),
     displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
     status: text("status", { enum: ["active", "blocked", "deleted"] })
       .notNull()
       .default("active"),

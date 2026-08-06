@@ -321,3 +321,33 @@ describe("fluxos críticos do FamilyCare", () => {
     });
   });
 });
+
+describe("Membros e convites", () => {
+  test("convida alguém pela família e mostra o link gerado", async () => {
+    const user = userEvent.setup();
+    const backend = await renderApp([]);
+
+    await user.click(screen.getByRole("button", { name: "Membros" }));
+    const panel = await screen.findByRole("dialog", { name: "Membros" });
+    expect(within(panel).getByText("ana@example.com")).toBeTruthy();
+
+    await user.click(within(panel).getByRole("button", { name: "Convidar" }));
+    const inviteView = await screen.findByRole("dialog", { name: "Convidar para a família" });
+
+    await user.type(within(inviteView).getByLabelText("E-mail da pessoa convidada"), "convidado@example.com");
+    await user.selectOptions(
+      within(inviteView).getByLabelText("Papel"),
+      "Somente leitura — só pode consultar",
+    );
+    await user.click(within(inviteView).getByRole("button", { name: "Gerar convite" }));
+
+    const link = await within(inviteView).findByLabelText("Link de convite");
+    expect((link as HTMLInputElement).value).toMatch(/\/convite\//);
+
+    await waitFor(() => {
+      const invitations = backend.getInvitations();
+      expect(invitations).toHaveLength(1);
+      expect(invitations[0]).toMatchObject({ emailNormalized: "convidado@example.com", role: "viewer" });
+    });
+  });
+});

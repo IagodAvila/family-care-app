@@ -54,7 +54,7 @@ export async function verifyValue<T>(token: string, secret: string): Promise<T |
   const isValid = await crypto.subtle.verify(
     "HMAC",
     key,
-    fromBase64Url(signatureB64),
+    fromBase64Url(signatureB64) as BufferSource,
     new TextEncoder().encode(envelopeB64),
   );
   if (!isValid) return null;

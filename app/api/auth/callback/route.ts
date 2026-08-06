@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const handshake = await verifyValue<{ state: string; verifier: string }>(
+    const handshake = await verifyValue<{ state: string; verifier: string; returnTo?: string }>(
       handshakeCookie,
       env.SESSION_SECRET,
     );
@@ -60,6 +60,8 @@ export async function GET(request: Request) {
         .set({
           displayName: profile.name ?? existing.displayName,
           emailNormalized: profile.email.toLowerCase(),
+          // Refreshed on every login — Google's photo URLs can rotate.
+          avatarUrl: profile.picture,
           lastLoginAt: now,
           updatedAt: now,
         })
@@ -72,6 +74,7 @@ export async function GET(request: Request) {
         authSubject: profile.sub,
         emailNormalized: profile.email.toLowerCase(),
         displayName: profile.name,
+        avatarUrl: profile.picture,
         status: "active",
         lastLoginAt: now,
         createdAt: now,
@@ -81,7 +84,7 @@ export async function GET(request: Request) {
 
     const sessionCookieValue = await createSessionCookieValue(userId, env.SESSION_SECRET);
 
-    const headers = new Headers({ Location: "/" });
+    const headers = new Headers({ Location: handshake.returnTo || "/" });
     headers.append("Set-Cookie", buildSessionSetCookie(sessionCookieValue, isSecure));
     headers.append("Set-Cookie", buildClearCookie(OAUTH_HANDSHAKE_COOKIE_NAME, { secure: isSecure }));
 

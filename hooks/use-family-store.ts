@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, type ApiError } from "@/lib/api-client";
 import {
   createMedication,
   familyColors,
@@ -18,7 +19,12 @@ const LEGACY_STORAGE_KEY = "familycare-family";
 const SAVE_INDICATOR_DURATION_MS = 2000;
 
 export type AuthState = "loading" | "needs-login" | "ready";
-export type CurrentUser = { id: string; displayName: string | null; emailNormalized: string };
+export type CurrentUser = {
+  id: string;
+  displayName: string | null;
+  emailNormalized: string;
+  avatarUrl: string | null;
+};
 
 type ServerMedication = {
   id: string;
@@ -44,32 +50,6 @@ type ServerRelative = {
   color: string;
   medications: ServerMedication[];
 };
-
-type ApiError = Error & { status?: number };
-
-async function api(path: string, init?: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-
-  if (!response.ok) {
-    let message = `Falha na requisição (${response.status}).`;
-    try {
-      const body: unknown = await response.json();
-      if (body && typeof body === "object" && "error" in body && typeof body.error === "string") {
-        message = body.error;
-      }
-    } catch {
-      // response body wasn't JSON; keep the generic message.
-    }
-    const error: ApiError = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-
-  return response.status === 204 ? null : response.json();
-}
 
 function fromServerMedication(row: ServerMedication): Medication {
   return {
@@ -370,10 +350,12 @@ export function useFamilyStore() {
   return {
     authState,
     user,
+    familyId,
     family,
     justSaved,
     error,
     clearError: () => setError(null),
+    reportError: (message: string) => setError(message),
     selected,
     selectedId,
     selectRelative: setSelectedId,

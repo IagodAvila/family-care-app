@@ -121,3 +121,11 @@ export function validateRelativeInput(
 export function validateExpectedVersion(value: number): number {
   return version(value);
 }
+
+export function validateEmail(value: string): string {
+  const normalized = requireText(value, 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return normalized;
+}

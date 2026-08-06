@@ -2,6 +2,7 @@ import { buildSetCookie } from "@/lib/auth/cookies";
 import { getAppEnv } from "@/lib/auth/env";
 import { buildGoogleAuthUrl, generatePkcePair, generateState } from "@/lib/auth/google";
 import { OAUTH_HANDSHAKE_COOKIE_NAME, OAUTH_HANDSHAKE_TTL_MS } from "@/lib/auth/oauth-handshake";
+import { sanitizeReturnTo } from "@/lib/auth/return-to";
 import { signValue } from "@/lib/auth/signed-cookie";
 import { withApi } from "@/lib/api/respond";
 
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
     const env = await getAppEnv();
     const url = new URL(request.url);
     const isSecure = url.protocol === "https:";
+    const returnTo = sanitizeReturnTo(url.searchParams.get("return_to"));
 
     const state = generateState();
     const { verifier, challenge } = await generatePkcePair();
@@ -23,7 +25,7 @@ export async function GET(request: Request) {
     });
 
     const handshakeCookieValue = await signValue(
-      { state, verifier },
+      { state, verifier, returnTo },
       env.SESSION_SECRET,
       OAUTH_HANDSHAKE_TTL_MS,
     );

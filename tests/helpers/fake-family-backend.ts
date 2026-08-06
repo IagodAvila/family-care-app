@@ -6,6 +6,16 @@
 // be against the real backend.
 import type { Medication, Relative } from "@/types/family";
 
+/** Shape a POST body's `medications` entries actually have on the wire — see `toMedicationInput` in lib/family-data.ts. */
+type MedicationWireInput = {
+  name: string;
+  dosage?: string;
+  orientation?: string;
+  frequency?: number | null;
+  schedules?: string[];
+  legacySchedule?: string | null;
+};
+
 type StoredMedication = {
   id: string;
   version: number;
@@ -31,6 +41,25 @@ type StoredRelative = {
   medications: StoredMedication[];
 };
 
+type StoredMember = {
+  userId: string;
+  role: "admin" | "caregiver" | "viewer";
+  status: "active" | "revoked";
+  joinedAt: number;
+  revokedAt: number | null;
+  emailNormalized: string;
+  displayName: string | null;
+};
+
+type StoredInvitation = {
+  id: string;
+  emailNormalized: string;
+  role: "caregiver" | "viewer";
+  status: "pending" | "accepted" | "revoked" | "expired";
+  expiresAt: number;
+  createdAt: number;
+};
+
 const FAMILY_ID = "family-1";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -47,6 +76,18 @@ function errorResponse(message: string, status: number, code?: string) {
 export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = []) {
   let nextId = 1;
   const relatives: StoredRelative[] = seedRelatives.map((relative) => toStoredRelative(relative, () => `seed-${nextId++}`));
+  const members: StoredMember[] = [
+    {
+      userId: "user-1",
+      role: "admin",
+      status: "active",
+      joinedAt: 0,
+      revokedAt: null,
+      emailNormalized: "ana@example.com",
+      displayName: "Ana Teste",
+    },
+  ];
+  const invitations: StoredInvitation[] = [];
 
   function toStoredRelative(relative: Relative, makeId: () => string): StoredRelative {
     return {
@@ -95,7 +136,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
 
     if (path === "/api/me" && method === "GET") {
       return jsonResponse({
-        user: { id: "user-1", displayName: "Ana Teste", emailNormalized: "ana@example.com" },
+        user: { id: "user-1", displayName: "Ana Teste", emailNormalized: "ana@example.com", avatarUrl: null },
         families: [{ family: { id: FAMILY_ID, name: "Família de Ana Teste" }, role: "admin" }],
       });
     }
@@ -116,7 +157,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
         allergies: body.allergies ?? [],
         notes: body.notes ?? "",
         color: body.color ?? "",
-        medications: (body.medications ?? []).map((medication: Medication) => ({
+        medications: (body.medications ?? []).map((medication: MedicationWireInput) => ({
           id: `medication-${nextId++}`,
           version: 1,
           name: medication.name,
@@ -210,6 +251,54 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
       }
     }
 
+    if (path === `/api/families/${FAMILY_ID}/members` && method === "GET") {
+      return jsonResponse({ members });
+    }
+
+    const memberMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/members/([^/]+)$`));
+    if (memberMatch) {
+      const member = members.find((item) => item.userId === memberMatch[1]);
+      if (!member) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+
+      if (method === "PATCH") {
+        member.role = body.role ?? member.role;
+        return jsonResponse({ member });
+      }
+      if (method === "DELETE") {
+        member.status = "revoked";
+        member.revokedAt = Date.now();
+        return jsonResponse({ member });
+      }
+    }
+
+    if (path === `/api/families/${FAMILY_ID}/invitations` && method === "GET") {
+      return jsonResponse({ invitations });
+    }
+
+    if (path === `/api/families/${FAMILY_ID}/invitations` && method === "POST") {
+      if (invitations.some((item) => item.emailNormalized === body.emailNormalized && item.status === "pending")) {
+        return errorResponse("Já existe um convite pendente para esse e-mail.", 409, "CONFLICT");
+      }
+      const invitation: StoredInvitation = {
+        id: `invitation-${nextId++}`,
+        emailNormalized: body.emailNormalized ?? "",
+        role: body.role ?? "viewer",
+        status: "pending",
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: Date.now(),
+      };
+      invitations.push(invitation);
+      return jsonResponse({ invitation, token: `fake-token-${invitation.id}` }, 201);
+    }
+
+    const invitationMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/invitations/([^/]+)$`));
+    if (invitationMatch && method === "DELETE") {
+      const invitation = invitations.find((item) => item.id === invitationMatch[1]);
+      if (!invitation) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      invitation.status = "revoked";
+      return new Response(null, { status: 204 });
+    }
+
     if (path === `/api/families/${FAMILY_ID}/import-local` && method === "POST") {
       const imported = (body.relatives ?? []).map((relative: Relative) => toStoredRelative(relative, () => `imported-${nextId++}`));
       relatives.push(...imported);
@@ -226,5 +315,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
   return {
     fetch: handle,
     getRelatives: () => relatives,
+    getMembers: () => members,
+    getInvitations: () => invitations,
   };
 }

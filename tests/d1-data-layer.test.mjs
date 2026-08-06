@@ -363,6 +363,134 @@ test("preserva relacionamentos e arquiva medicamentos junto com o familiar", asy
   assert.ok(storedMedications.every((medication) => medication.deletedAt));
 });
 
+test("convite pendente é aceito pelo e-mail correto e vira membro ativo", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin");
+  await seedUser(db, "invite-guest");
+
+  const { invitation, token } = await service.createInvitation(context, {
+    emailNormalized: "invite-guest@invalid.example",
+    role: "caregiver",
+  });
+  assert.equal(invitation.status, "pending");
+  assert.ok(token.length >= 32);
+
+  const family = await service.acceptInvitation({ userId: "invite-guest" }, token);
+  assert.equal(family.id, context.familyId);
+
+  const members = await service.listMembersWithUsers(context);
+  const guest = members.find((member) => member.userId === "invite-guest");
+  assert.equal(guest.role, "caregiver");
+  assert.equal(guest.status, "active");
+  assert.equal(guest.emailNormalized, "invite-guest@invalid.example");
+
+  const [reloadedInvitation] = await service.listInvitations(context);
+  assert.equal(reloadedInvitation.status, "accepted");
+});
+
+test("recusa aceite com token inválido, expirado, e-mail incompatível ou já usado", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin-2");
+  await seedUser(db, "invite-guest-2");
+  await seedUser(db, "invite-stranger");
+
+  await expectDataError(
+    service.acceptInvitation({ userId: "invite-guest-2" }, "token-que-nao-existe"),
+    "NOT_FOUND",
+  );
+
+  const { token } = await service.createInvitation(context, {
+    emailNormalized: "invite-guest-2@invalid.example",
+    role: "viewer",
+  });
+
+  await expectDataError(
+    service.acceptInvitation({ userId: "invite-stranger" }, token),
+    "FORBIDDEN",
+  );
+
+  await service.acceptInvitation({ userId: "invite-guest-2" }, token);
+  await expectDataError(
+    service.acceptInvitation({ userId: "invite-guest-2" }, token),
+    "NOT_FOUND",
+  );
+});
+
+test("convite expira e não pode mais ser aceito", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin-3");
+  await seedUser(db, "invite-guest-3");
+
+  const { token } = await service.createInvitation(context, {
+    emailNormalized: "invite-guest-3@invalid.example",
+    role: "viewer",
+  });
+
+  const eightDaysLater = new FamilyCareDataService(db, {
+    now: () => 1_800_000_000_000 + 8 * 24 * 60 * 60 * 1000,
+  });
+  await expectDataError(
+    eightDaysLater.acceptInvitation({ userId: "invite-guest-3" }, token),
+    "NOT_FOUND",
+  );
+});
+
+test("revoga convite pendente e impede reaproveitamento do link", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin-4");
+  await seedUser(db, "invite-guest-4");
+
+  const { invitation, token } = await service.createInvitation(context, {
+    emailNormalized: "invite-guest-4@invalid.example",
+    role: "caregiver",
+  });
+  const revoked = await service.revokeInvitation(context, invitation.id);
+  assert.equal(revoked.status, "revoked");
+
+  await expectDataError(
+    service.acceptInvitation({ userId: "invite-guest-4" }, token),
+    "NOT_FOUND",
+  );
+  await expectDataError(
+    service.revokeInvitation(context, invitation.id),
+    "CONFLICT",
+  );
+});
+
+test("rejeita convite duplicado pendente para o mesmo e-mail", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin-5");
+
+  await service.createInvitation(context, {
+    emailNormalized: "duplicado@invalid.example",
+    role: "viewer",
+  });
+  await expectDataError(
+    service.createInvitation(context, {
+      emailNormalized: "duplicado@invalid.example",
+      role: "caregiver",
+    }),
+    "CONFLICT",
+  );
+});
+
+test("somente administrador convida, lista e revoga convites", async () => {
+  const { db, service } = await createTestContext();
+  const { family, context: adminContext } = await createFamilyFor(service, db, "invite-admin-6");
+  await seedUser(db, "invite-caregiver-6");
+  await service.addMember(adminContext, { userId: "invite-caregiver-6", role: "caregiver" });
+  const caregiverContext = { userId: "invite-caregiver-6", familyId: family.id };
+
+  await expectDataError(
+    service.createInvitation(caregiverContext, {
+      emailNormalized: "alguem@invalid.example",
+      role: "viewer",
+    }),
+    "FORBIDDEN",
+  );
+  await expectDataError(service.listInvitations(caregiverContext), "FORBIDDEN");
+});
+
 test("reativa vínculo revogado sem duplicar o membro", async () => {
   const { db, service } = await createTestContext();
   const { context } = await createFamilyFor(service, db, "member-admin");
