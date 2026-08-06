@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createMedication,
   createRelative,
@@ -11,11 +11,15 @@ import {
 import type { Medication, Relative } from "@/types/family";
 
 const STORAGE_KEY = "familycare-family";
+/** How long the "changes saved" indicator stays visible. */
+const SAVE_INDICATOR_DURATION_MS = 2000;
 
 export function useFamilyStore() {
   const [family, setFamily] = useState<Relative[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const skipNextSaveIndicator = useRef(true);
 
   /* eslint-disable react-hooks/set-state-in-effect -- Hydrates React state from browser storage once. */
   useEffect(() => {
@@ -38,16 +42,30 @@ export function useFamilyStore() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (hydrated) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(family));
+    if (!hydrated) return;
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(family));
+
+    // The first write after hydration just persists what was already on
+    // disk (or an empty family); it is not a change the person made.
+    if (skipNextSaveIndicator.current) {
+      skipNextSaveIndicator.current = false;
+      return;
     }
+
+    setJustSaved(true);
+    const timeout = window.setTimeout(
+      () => setJustSaved(false),
+      SAVE_INDICATOR_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
   }, [family, hydrated]);
 
   const selected = family.find((person) => person.id === selectedId) ?? family[0];
 
   function saveRelative(editingId: string | null, data: FormData, medications: Medication[]) {
     if (editingId) {
-      setFamily((current) => updateRelative(current, editingId, data));
+      setFamily((current) => updateRelative(current, editingId, data, medications));
       return;
     }
 
@@ -62,18 +80,14 @@ export function useFamilyStore() {
     setSelectedId(person.id);
   }
 
-  function removeSelectedRelative() {
+  /**
+   * Deletes the selected relative. The caller is responsible for confirming
+   * the action with the person first (see `ConfirmDialog`); this function
+   * performs the deletion unconditionally. Returns whether the family
+   * became empty, so the caller can turn off emergency mode if needed.
+   */
+  function deleteSelectedRelative() {
     if (!selected) return false;
-
-    const firstConfirmation = window.confirm(
-      `Tem certeza de que deseja apagar ${selected.name}?`,
-    );
-    if (!firstConfirmation) return false;
-
-    const finalConfirmation = window.confirm(
-      `Confirmação final: todos os dados de ${selected.name}, incluindo medicamentos, serão excluídos definitivamente. Deseja continuar?`,
-    );
-    if (!finalConfirmation) return false;
 
     const remainingFamily = deleteRelative(family, selected.id);
     setFamily(remainingFamily);
@@ -97,13 +111,9 @@ export function useFamilyStore() {
     return true;
   }
 
-  function removeMedication(index: number) {
+  /** Removes a medication unconditionally; the caller confirms with the person first. */
+  function deleteMedication(index: number) {
     if (!selected) return;
-
-    const medication = selected.medications[index];
-    if (!window.confirm(`Remover ${medication.name} dos medicamentos de ${selected.name}?`)) {
-      return;
-    }
 
     setFamily((current) =>
       current.map((person) =>
@@ -121,12 +131,13 @@ export function useFamilyStore() {
 
   return {
     family,
+    justSaved,
     selected,
     selectedId,
     selectRelative: setSelectedId,
     saveRelative,
-    removeSelectedRelative,
+    deleteSelectedRelative,
     addMedication,
-    removeMedication,
+    deleteMedication,
   };
 }

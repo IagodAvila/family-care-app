@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-:root { --ink: #143b3a; --muted: #657b79; --teal: #1f7773; --teal-dark: #155d5a; --mint: #dff1ed; --paper: #f7f9f7; --line: #dce5e2; --red: #c84f4f; --red-soft: #fff0ed; }
+:root { --ink: #143b3a; --muted: #657b79; --teal: #1f7773; --teal-dark: #155d5a; --mint: #dff1ed; --paper: #f7f9f7; --line: #dce5e2; --red: #c84f4f; --red-soft: #fff0ed; --surface: #ffffff; --surface-soft: #f7f9f7; color-scheme: light dark; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; overflow-x: hidden; background: var(--paper); color: var(--ink); font-family: "Avenir Next", "Segoe UI", Arial, sans-serif; }
@@ -154,6 +154,13 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .privacy-modal h2 { margin-bottom: 12px; }
 .privacy-modal > p:not(.eyebrow) { color: var(--muted); font-size: 13px; line-height: 1.65; }
 .privacy-modal .submit-button { margin-top: 10px; }
+.confirm-dialog { width: min(440px, 100%); }
+.confirm-dialog h2 { margin: 0 0 10px; letter-spacing: -.6px; }
+.confirm-dialog p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.danger-button, .form-actions .danger-button { background: var(--red); }
+.danger-button:hover, .danger-button:focus-visible { background: #a83f3f; }
+.save-toast { position: fixed; left: 50%; bottom: 24px; z-index: 60; padding: 11px 18px; border-radius: 11px; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 750; box-shadow: 0 12px 28px rgba(0,0,0,.22); transform: translateX(-50%); animation: save-toast-in .2s ease; }
+@keyframes save-toast-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .emergency-active .desktop-nav, .emergency-active .app-intro, .emergency-active .family-panel, .emergency-active footer { display: none; }
 .emergency-active .workspace { grid-template-columns: 1fr; max-width: 900px; }
@@ -213,5 +220,86 @@ input[aria-invalid="true"] { border-color: var(--red); }
   .emergency-top-button { max-width: 132px; flex: 0 0 auto; padding: 7px 8px; }
   .emergency-label-full { display: none; }
   .emergency-label-mobile { display: inline; }
+  .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+/*
+ * Dark theme. Adds an alternate value for every surface/text color the light
+ * theme hardcodes instead of expressing through the `:root` variables above.
+ * Nothing in the light-mode rules is modified.
+ *
+ * Applied explicitly through `data-theme="dark"` on <html>, set by the
+ * sun/moon button (ThemeToggle) and persisted in localStorage. The inline
+ * script in layout.tsx sets the same attribute before first paint — reading
+ * the stored choice, or the OS preference on a first visit — so there is no
+ * flash of the wrong theme and no separate `prefers-color-scheme` block to
+ * keep in sync with this one.
+ */
+:root[data-theme="dark"] {
+  /* Neutral slate scale for backgrounds — deliberately *not* tinted toward
+     teal, so the accent color still reads as an accent instead of blending
+     into a wash of same-hue surfaces. Each step is a clear jump in
+     lightness so panels, inputs and hovers stay visually separated. */
+  --paper: #191d21;
+  --surface: #23272c;
+  --surface-soft: #2f353b;
+  --line: #3f464d;
+  --ink: #f1f3f4;
+  --muted: #9aa4a9;
+  --teal: #3fc7bb;
+  --teal-dark: #7ee0d5;
+  --mint: #17332f;
+  --red: #ef8a7d;
+  --red-soft: #3a2420;
+}
+
+:root[data-theme="dark"] :where(a, button, input, select, textarea, [tabindex]):focus-visible { outline-color: var(--teal-dark); }
+:root[data-theme="dark"] .topbar { background: rgba(25,29,33,.85); }
+:root[data-theme="dark"] .modal-backdrop { background: rgba(8,10,12,.7); }
+:root[data-theme="dark"] :is(.eyebrow, .relation-label) { color: var(--teal-dark); }
+:root[data-theme="dark"] :is(.family-panel, .medical-record, .quick-family-control select,
+.more-options-menu, footer, .modal) { background: var(--surface); }
+:root[data-theme="dark"] :is(.add-relative-compact, .search, .person-card:hover, .quick-family-switcher,
+.edit-button, .more-options-button, .more-options-button:hover,
+.vitals-grid, .vital-card, .chips .chip-neutral, .modal-header > button,
+input, select, textarea, .form-actions button, .emergency-top-button,
+.emergency-top-button:disabled) { background: var(--surface-soft); }
+:root[data-theme="dark"] :is(.add-relative-compact, .edit-button, .add-temporary-medication,
+.person-card.selected) { border-color: #33645c; }
+:root[data-theme="dark"] .person-card.selected { background: var(--mint); }
+:root[data-theme="dark"] .family-list { scrollbar-color: #446e65 var(--surface-soft); }
+:root[data-theme="dark"] .family-list::-webkit-scrollbar-track { background: var(--surface-soft); }
+:root[data-theme="dark"] .family-list::-webkit-scrollbar-thumb { border-color: var(--surface-soft); background: #446e65; }
+:root[data-theme="dark"] .blood-mini { background: var(--surface-soft); color: var(--red); }
+:root[data-theme="dark"] form label { color: #b4bcc0; }
+:root[data-theme="dark"] :is(.person-summary small, .vital-card small, .medication-heading-actions > span,
+.medication-row small, .empty-medications, footer,
+.temporary-medication-list small) { color: #a1abb0; }
+:root[data-theme="dark"] :is(.remove-medication, .temporary-medication-list button) { color: #d99a92; }
+:root[data-theme="dark"] .delete-menu-item { color: var(--red); }
+:root[data-theme="dark"] .emergency-top-button { color: var(--red); }
+:root[data-theme="dark"] .emergency-top-button.active { background: #7a332f; }
+:root[data-theme="dark"] .emergency-top-button:disabled { color: #7c8489; }
+:root[data-theme="dark"] .notes { background: #2c2510; border-left-color: #caa353; }
+:root[data-theme="dark"] .notes strong { color: #e8c680; }
+:root[data-theme="dark"] .notes p { color: #cbb98f; }
+:root[data-theme="dark"] :is(.emergency-active .quick-family-switcher, .emergency-active .record-header,
+.emergency-active .blood-card) { background: #2a1613; }
+:root[data-theme="dark"] .emergency-active .medical-record { border-color: #7a3a34; }
+
+/* Theme toggle button (sun/moon). Both icons are always in the DOM so the
+   server-rendered and first client-rendered markup match exactly; which one
+   is visible is decided purely by CSS from `data-theme`, so there is nothing
+   for React to get wrong before hydration runs. */
+.theme-toggle { width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 50%; display: grid; place-items: center; background: white; color: var(--ink); font-size: 16px; line-height: 1; transition: background .15s ease; }
+.theme-toggle:hover { background: var(--mint); }
+.theme-icon-moon { display: none; }
+:root[data-theme="dark"] .theme-toggle { background: var(--surface-soft); }
+/* `--mint` is darker than `--surface-soft` in the dark palette (it's meant
+   for small icon badges, not a hover highlight), so the light-mode hover
+   above would barely register here — override with something visibly
+   lighter than the button's own resting background instead. */
+:root[data-theme="dark"] .theme-toggle:hover { background: #2c5850; }
+:root[data-theme="dark"] .theme-icon-sun { display: none; }
+:root[data-theme="dark"] .theme-icon-moon { display: inline; }

@@ -10,7 +10,7 @@
     "build": "vinext build",
     "start": "vinext start",
     "test": "npm run build && npm run test:unit && npm run test:components",
-    "test:unit": "node --experimental-strip-types --test --test-isolation=none tests/*.test.mjs",
+    "test:unit": "node --experimental-strip-types --test --experimental-test-isolation=none tests/*.test.mjs",
     "test:components": "vitest run tests/components.test.tsx --reporter=verbose",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
@@ -43,5 +43,6 @@
     "vitest": "4.1.10",
     "wrangler": "4.92.0"
   },
-  "type": "module"
+  "type": "module",
+  "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e"
 }

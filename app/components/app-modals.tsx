@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import type { Medication, Relative } from "@/types/family";
+import { ConfirmDialog } from "./confirm-dialog";
 import { MedicationFields } from "./medication-fields";
 import { Modal } from "./modal";
 import { RelativeForm } from "./relative-form";
@@ -9,30 +10,45 @@ import { RelativeForm } from "./relative-form";
 type AppModalsProps = {
   editingRelative?: Relative;
   isEditingRelative: boolean;
+  pendingMedicationIndex: number | null;
   selected?: Relative;
+  showDeleteRelativeConfirm: boolean;
   showMedicationForm: boolean;
   showPrivacy: boolean;
   showRelativeForm: boolean;
   onAddMedication: (data: FormData) => boolean;
+  onCancelDeleteRelative: () => void;
+  onCancelRemoveMedication: () => void;
   onCloseMedicationForm: () => void;
   onClosePrivacy: () => void;
   onCloseRelativeForm: () => void;
+  onConfirmDeleteRelative: () => void;
+  onConfirmRemoveMedication: () => void;
   onSaveRelative: (data: FormData, medications: Medication[]) => void;
 };
 
 export function AppModals({
   editingRelative,
   isEditingRelative,
+  pendingMedicationIndex,
   selected,
+  showDeleteRelativeConfirm,
   showMedicationForm,
   showPrivacy,
   showRelativeForm,
   onAddMedication,
+  onCancelDeleteRelative,
+  onCancelRemoveMedication,
   onCloseMedicationForm,
   onClosePrivacy,
   onCloseRelativeForm,
+  onConfirmDeleteRelative,
+  onConfirmRemoveMedication,
   onSaveRelative,
 }: AppModalsProps) {
+  const pendingMedication = pendingMedicationIndex !== null
+    ? selected?.medications[pendingMedicationIndex]
+    : undefined;
   function addMedication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const wasAdded = onAddMedication(new FormData(event.currentTarget));
@@ -123,6 +139,30 @@ export function AppModals({
             Entendi
           </button>
         </Modal>
+      )}
+
+      {showDeleteRelativeConfirm && selected && (
+        <ConfirmDialog
+          titleId="delete-relative-title"
+          tone="danger"
+          title={`Excluir ${selected.name}?`}
+          description={`Todos os dados de ${selected.name}, incluindo medicamentos, serão excluídos permanentemente. Esta ação não pode ser desfeita.`}
+          confirmLabel="Excluir familiar"
+          onCancel={onCancelDeleteRelative}
+          onConfirm={onConfirmDeleteRelative}
+        />
+      )}
+
+      {pendingMedication && (
+        <ConfirmDialog
+          titleId="remove-medication-title"
+          tone="danger"
+          title={`Remover ${pendingMedication.name}?`}
+          description={`${pendingMedication.name} deixará de aparecer nos medicamentos de ${selected?.name}.`}
+          confirmLabel="Remover medicamento"
+          onCancel={onCancelRemoveMedication}
+          onConfirm={onConfirmRemoveMedication}
+        />
       )}
     </>
   );

@@ -32,7 +32,9 @@ export function RelativeForm({
     internalDateToDisplay(relative?.birthDate ?? ""),
   );
   const [birthDateError, setBirthDateError] = useState("");
-  const [medications, setMedications] = useState<Medication[]>([]);
+  const [medications, setMedications] = useState<Medication[]>(
+    () => relative?.medications ?? [],
+  );
   const [medicationError, setMedicationError] = useState("");
   const [medicationDraft, setMedicationDraft] = useState<Medication>(EMPTY_MEDICATION);
   const [editingMedicationIndex, setEditingMedicationIndex] = useState<number | null>(null);
@@ -153,101 +155,99 @@ export function RelativeForm({
         </label>
       </div>
 
-      {!isEditing && (
-        <fieldset>
-          <legend>Medicamentos em uso</legend>
-          <div className="temporary-medication-form">
-            <div className="form-grid medication-fields">
-              <label>
-                Nome
-                <input
-                  id="temporary-medication-name"
-                  value={medicationDraft.name}
-                  onChange={(event) => {
-                    setMedicationDraft((current) => ({ ...current, name: event.target.value }));
-                    setMedicationError("");
-                  }}
-                  placeholder="Ex.: Losartana"
-                  aria-invalid={Boolean(medicationError)}
-                  aria-describedby={medicationError ? "temporary-medication-error" : undefined}
-                />
-              </label>
-              <label>
-                Dosagem ou apresentação
-                <input
-                  value={medicationDraft.dosage}
-                  onChange={(event) =>
-                    setMedicationDraft((current) => ({
-                      ...current,
-                      dosage: event.target.value,
-                    }))
-                  }
-                  placeholder="Ex.: 50 mg"
-                />
-              </label>
-              <label className="full">
-                Orientação de uso
-                <input
-                  value={medicationDraft.orientation ?? ""}
-                  onChange={(event) =>
-                    setMedicationDraft((current) => ({
-                      ...current,
-                      orientation: event.target.value,
-                    }))
-                  }
-                  placeholder="Ex.: Tomar a cada 8 horas por 7 dias"
-                />
-              </label>
-            </div>
-
-            {medicationError && (
-              <p className="field-error" id="temporary-medication-error" role="alert">
-                {medicationError}
-              </p>
-            )}
-
-            <button
-              className="add-temporary-medication"
-              type="button"
-              onClick={addTemporaryMedication}
-            >
-              {editingMedicationIndex === null
-                ? "Adicionar medicamento"
-                : "Salvar medicamento"}
-            </button>
+      <fieldset>
+        <legend>Medicamentos em uso</legend>
+        <div className="temporary-medication-form">
+          <div className="form-grid medication-fields">
+            <label>
+              Nome
+              <input
+                id="temporary-medication-name"
+                value={medicationDraft.name}
+                onChange={(event) => {
+                  setMedicationDraft((current) => ({ ...current, name: event.target.value }));
+                  setMedicationError("");
+                }}
+                placeholder="Ex.: Losartana"
+                aria-invalid={Boolean(medicationError)}
+                aria-describedby={medicationError ? "temporary-medication-error" : undefined}
+              />
+            </label>
+            <label>
+              Dosagem ou apresentação
+              <input
+                value={medicationDraft.dosage}
+                onChange={(event) =>
+                  setMedicationDraft((current) => ({
+                    ...current,
+                    dosage: event.target.value,
+                  }))
+                }
+                placeholder="Ex.: 50 mg"
+              />
+            </label>
+            <label className="full">
+              Orientação de uso
+              <input
+                value={medicationDraft.orientation ?? ""}
+                onChange={(event) =>
+                  setMedicationDraft((current) => ({
+                    ...current,
+                    orientation: event.target.value,
+                  }))
+                }
+                placeholder="Ex.: Tomar a cada 8 horas por 7 dias"
+              />
+            </label>
           </div>
 
-          {medications.length > 0 && (
-            <ul className="temporary-medication-list" aria-label="Medicamentos adicionados">
-              {medications.map((medication, index) => (
-                <li key={`${medication.name}-${index}`}>
-                  <span>
-                    <strong>{medication.name}</strong>
-                    {medication.dosage && <small>{medication.dosage}</small>}
-                    {medication.orientation && <small>{medication.orientation}</small>}
-                  </span>
-                  <span className="temporary-medication-actions">
-                    <button
-                      type="button"
-                      aria-label={`Editar ${medication.name}`}
-                      onClick={() => editTemporaryMedication(medication, index)}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Remover ${medication.name}`}
-                      onClick={() => removeTemporaryMedication(index)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {medicationError && (
+            <p className="field-error" id="temporary-medication-error" role="alert">
+              {medicationError}
+            </p>
           )}
-        </fieldset>
-      )}
+
+          <button
+            className="add-temporary-medication"
+            type="button"
+            onClick={addTemporaryMedication}
+          >
+            {editingMedicationIndex === null
+              ? "Adicionar medicamento"
+              : "Salvar medicamento"}
+          </button>
+        </div>
+
+        {medications.length > 0 && (
+          <ul className="temporary-medication-list" aria-label="Medicamentos adicionados">
+            {medications.map((medication, index) => (
+              <li key={`${medication.name}-${index}`}>
+                <span>
+                  <strong>{medication.name}</strong>
+                  {medication.dosage && <small>{medication.dosage}</small>}
+                  {medication.orientation && <small>{medication.orientation}</small>}
+                </span>
+                <span className="temporary-medication-actions">
+                  <button
+                    type="button"
+                    aria-label={`Editar ${medication.name}`}
+                    onClick={() => editTemporaryMedication(medication, index)}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remover ${medication.name}`}
+                    onClick={() => removeTemporaryMedication(index)}
+                  >
+                    ×
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </fieldset>
 
       <label className={isEditing ? "edit-notes" : ""}>
         Observações

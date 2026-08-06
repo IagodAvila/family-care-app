@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { resolveInitialThemeScript, THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
+
+const THEME_INIT_SCRIPT = resolveInitialThemeScript(THEME_STORAGE_KEY);
 
 export async function generateMetadata(): Promise<Metadata> {
   const incomingHeaders = await headers();
@@ -31,5 +34,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pt-BR"><body>{children}</body></html>;
+  return (
+    <html lang="pt-BR">
+      <body>
+        {/* Blocking script, runs before hydration: sets `data-theme` on
+            <html> from the stored preference (or the OS preference on a
+            first visit) so the page never flashes the wrong theme. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {children}
+      </body>
+    </html>
+  );
 }

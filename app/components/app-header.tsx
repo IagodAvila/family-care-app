@@ -1,3 +1,5 @@
+import { ThemeToggle } from "./theme-toggle";
+
 type AppHeaderProps = {
   emergencyMode: boolean;
   hasSelectedRelative: boolean;
@@ -39,6 +41,8 @@ export function AppHeader({
           </>
         ) : "Modo emergência"}
       </button>
+
+      <ThemeToggle />
 
       {!hasSelectedRelative && (
         <span className="sr-only" id="emergency-unavailable">
