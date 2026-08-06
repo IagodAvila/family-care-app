@@ -8,10 +8,12 @@ const uiSourceFiles = [
   "app/components/app-footer.tsx",
   "app/components/app-header.tsx",
   "app/components/app-modals.tsx",
+  "app/components/confirm-dialog.tsx",
   "app/components/empty-family-record.tsx",
   "app/components/family-panel.tsx",
   "app/components/medical-record.tsx",
   "app/components/relative-form.tsx",
+  "app/components/theme-toggle.tsx",
   "hooks/use-family-store.ts",
 ];
 
@@ -106,7 +108,10 @@ test("modal reutilizável gerencia foco, Escape, backdrop, isolamento e rolagem"
     readFile(new URL("app/components/modal.tsx", projectRoot), "utf8"),
   ]);
 
-  assert.equal((page.match(/<Modal\s/g) ?? []).length, 3);
+  // 3 direct <Modal> usages in app-modals.tsx (relative form, medication form,
+  // privacy) plus the one inside the reusable ConfirmDialog component, used
+  // for the delete-relative and remove-medication confirmations.
+  assert.equal((page.match(/<Modal\s/g) ?? []).length, 4);
   assert.match(page, /initialFocusSelector='input\[name="name"\]'/);
   assert.match(page, /initialFocusSelector="\[data-modal-primary\]"/);
   assert.doesNotMatch(page, /autoFocus/);
@@ -172,6 +177,23 @@ test("mantém nome acessível completo e rótulo curto de emergência em 320 px"
   assert.match(css, /\.emergency-label-full \{ display: none; \}/);
   assert.match(css, /\.emergency-label-mobile \{ display: inline; \}/);
   assert.match(css, /:focus-visible \{ outline: 3px solid #0b6f69;/);
+});
+
+test("permite alternar entre tema claro e escuro com um botão, sem depender só do sistema", async () => {
+  const [page, css, layout] = await Promise.all([
+    readUiSource(),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+    readFile(new URL("app/layout.tsx", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /aria-label="Alternar entre tema claro e escuro"/);
+  assert.match(page, /className="theme-icon theme-icon-sun"/);
+  assert.match(page, /className="theme-icon theme-icon-moon"/);
+  assert.match(page, /root\.dataset\.theme = next/);
+  assert.match(css, /:root\[data-theme="dark"\]/);
+  assert.doesNotMatch(css, /@media \(prefers-color-scheme: dark\)\s*\{/);
+  assert.match(layout, /dangerouslySetInnerHTML/);
+  assert.match(layout, /resolveInitialThemeScript/);
 });
 
 test("ships production metadata without starter artifacts", async () => {

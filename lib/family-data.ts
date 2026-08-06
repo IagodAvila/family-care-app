@@ -191,12 +191,19 @@ export function updateRelative(
   family: readonly Relative[],
   relativeId: string,
   data: FormData,
+  medications?: readonly Medication[],
 ): Relative[] {
   return family.map((person) => person.id === relativeId ? {
     ...person,
     name: String(data.get("name") ?? ""), relation: String(data.get("relation") ?? ""),
     birthDate: String(data.get("birthDate") ?? ""), bloodType: String(data.get("bloodType") ?? ""),
     conditions: parseList(data.get("conditions")), allergies: parseList(data.get("allergies")), notes: String(data.get("notes") ?? ""),
+    // `medications` is only omitted by callers that don't manage the medication
+    // list (kept for backward compatibility); when provided, it replaces the
+    // person's medications, same normalization as a new relative.
+    medications: medications
+      ? medications.map(normalizeMedication).filter((medication) => medication.name)
+      : person.medications,
   } : person);
 }
 

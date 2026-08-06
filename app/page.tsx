@@ -13,17 +13,20 @@ import type { Medication } from "@/types/family";
 export default function Home() {
   const {
     family,
+    justSaved,
     selected,
     selectRelative,
     saveRelative,
-    removeSelectedRelative,
+    deleteSelectedRelative,
     addMedication,
-    removeMedication,
+    deleteMedication,
   } = useFamilyStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showRelativeForm, setShowRelativeForm] = useState(false);
   const [showMedicationForm, setShowMedicationForm] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showDeleteRelativeConfirm, setShowDeleteRelativeConfirm] = useState(false);
+  const [pendingMedicationIndex, setPendingMedicationIndex] = useState<number | null>(null);
   const [emergencyMode, setEmergencyMode] = useState(false);
 
   const editingRelative = family.find((person) => person.id === editingId);
@@ -49,9 +52,20 @@ export default function Home() {
     closeRelativeForm();
   }
 
-  function handleDeleteRelative() {
-    const familyBecameEmpty = removeSelectedRelative();
+  function requestDeleteRelative() {
+    setShowDeleteRelativeConfirm(true);
+  }
+
+  function confirmDeleteRelative() {
+    setShowDeleteRelativeConfirm(false);
+    const familyBecameEmpty = deleteSelectedRelative();
     if (familyBecameEmpty) setEmergencyMode(false);
+  }
+
+  function confirmRemoveMedication() {
+    if (pendingMedicationIndex === null) return;
+    deleteMedication(pendingMedicationIndex);
+    setPendingMedicationIndex(null);
   }
 
   function toggleEmergencyMode() {
@@ -85,9 +99,9 @@ export default function Home() {
             family={family}
             selected={selected}
             onAddMedication={() => setShowMedicationForm(true)}
-            onDeleteRelative={handleDeleteRelative}
+            onDeleteRelative={requestDeleteRelative}
             onEditRelative={openEditRelative}
-            onRemoveMedication={removeMedication}
+            onRemoveMedication={setPendingMedicationIndex}
             onSelectRelative={selectRelative}
           />
         ) : (
@@ -97,17 +111,29 @@ export default function Home() {
 
       <AppFooter onOpenPrivacy={() => setShowPrivacy(true)} />
 
+      {justSaved && (
+        <div className="save-toast" role="status" aria-live="polite">
+          Alterações salvas
+        </div>
+      )}
+
       <AppModals
         editingRelative={editingRelative}
         isEditingRelative={Boolean(editingId)}
+        pendingMedicationIndex={pendingMedicationIndex}
         selected={selected}
+        showDeleteRelativeConfirm={showDeleteRelativeConfirm}
         showMedicationForm={showMedicationForm}
         showPrivacy={showPrivacy}
         showRelativeForm={showRelativeForm}
         onAddMedication={addMedication}
+        onCancelDeleteRelative={() => setShowDeleteRelativeConfirm(false)}
+        onCancelRemoveMedication={() => setPendingMedicationIndex(null)}
         onCloseMedicationForm={() => setShowMedicationForm(false)}
         onClosePrivacy={() => setShowPrivacy(false)}
         onCloseRelativeForm={closeRelativeForm}
+        onConfirmDeleteRelative={confirmDeleteRelative}
+        onConfirmRemoveMedication={confirmRemoveMedication}
         onSaveRelative={handleSaveRelative}
       />
     </main>

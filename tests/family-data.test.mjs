@@ -99,6 +99,17 @@ test("edita familiar sem perder medicamentos, identidade ou dados temporários j
   assert.equal(updated[0].name, "Ana Lima");
 });
 
+test("edita familiar substituindo medicamentos quando a lista é informada", () => {
+  const family = [{ ...originalRelative, medications: [{ name: "Vitamina D", dosage: "1 dose", orientation: "Semanal" }] }];
+  const updated = updateRelative(
+    family,
+    originalRelative.id,
+    formData({ name: "Ana Lima", relation: "Avó", birthDate: "1970-05-10", bloodType: "A-", conditions: "", allergies: "", notes: "" }),
+    [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }, { name: "", dosage: "", orientation: "" }],
+  );
+  assert.deepEqual(updated[0].medications, [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }]);
+});
+
 test("exclui somente o familiar selecionado e remove dados fictícios antigos", () => {
   const secondRelative = { ...originalRelative, id: "relative-2" };
   assert.deepEqual(deleteRelative([originalRelative, secondRelative], originalRelative.id), [secondRelative]);

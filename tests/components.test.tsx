@@ -69,6 +69,8 @@ function storedRelative(overrides: Partial<Relative>): Relative {
 
 beforeEach(() => {
   window.localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.style.colorScheme = "";
 });
 
 afterEach(() => {
@@ -205,6 +207,106 @@ describe("fluxos críticos do FamilyCare", () => {
       const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
       expect(stored[0].medications[0].orientation).toBe("Semanal");
       expect(stored[0].medications[0].schedule).toBe("Semanal");
+    });
+  });
+
+  test("alterna entre tema claro e escuro ao clicar no botão sol/lua", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    const toggle = screen.getByRole("button", { name: "Alternar entre tema claro e escuro" });
+
+    await user.click(toggle);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(window.localStorage.getItem("familycare-theme")).toBe("dark");
+
+    await user.click(toggle);
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(window.localStorage.getItem("familycare-theme")).toBe("light");
+  });
+
+  test("exclui familiar somente após confirmar no diálogo em duas etapas", async () => {
+    const storedFamily = [storedRelative({})];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await screen.findByRole("heading", { name: "Ana Souza", level: 2 });
+    await user.click(screen.getByRole("button", { name: "Mais opções para este familiar" }));
+    await user.click(screen.getByRole("button", { name: "Excluir familiar" }));
+
+    const confirmDialog = screen.getByRole("dialog", { name: "Excluir Ana Souza?" });
+    expect(within(confirmDialog).getByText(/incluindo medicamentos/i)).toBeTruthy();
+
+    await user.click(within(confirmDialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Ana Souza", level: 2 })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Mais opções para este familiar" }));
+    await user.click(screen.getByRole("button", { name: "Excluir familiar" }));
+    await user.click(screen.getByRole("button", { name: "Excluir familiar" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Ana Souza", level: 2 })).toBeNull();
+    });
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
+      expect(stored).toHaveLength(0);
+    });
+  });
+
+  test("remove medicamento somente após confirmar no diálogo", async () => {
+    const storedFamily = [storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }],
+    })];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await screen.findByText("Losartana");
+    await user.click(screen.getByRole("button", { name: "Remover Losartana" }));
+
+    const confirmDialog = screen.getByRole("dialog", { name: "Remover Losartana?" });
+    await user.click(within(confirmDialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.getByText("Losartana")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Remover Losartana" }));
+    await user.click(screen.getByRole("button", { name: "Remover medicamento" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Losartana")).toBeNull();
+    });
+  });
+
+  test("edita familiar e substitui a lista de medicamentos existente", async () => {
+    const storedFamily = [storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }],
+    })];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(storedFamily));
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await screen.findByText("Losartana");
+    await user.click(screen.getByRole("button", { name: "Editar familiar" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Editar familiar" });
+    expect(within(dialog).getByText("Losartana")).toBeTruthy();
+
+    await user.click(within(dialog).getByRole("button", { name: "Remover Losartana" }));
+    await user.type(within(dialog).getByLabelText("Nome", { exact: true }), "Vitamina D");
+    await user.type(within(dialog).getByLabelText("Dosagem ou apresentação"), "1 dose");
+    await user.click(within(dialog).getByRole("button", { name: "Adicionar medicamento" }));
+    await user.click(within(dialog).getByRole("button", { name: "Salvar alterações" }));
+
+    expect(screen.getByText("Vitamina D")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.queryByText("Losartana")).toBeNull();
+    });
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
+      expect(stored[0].medications).toEqual([
+        { name: "Vitamina D", dosage: "1 dose", orientation: "" },
+      ]);
     });
   });
 });
