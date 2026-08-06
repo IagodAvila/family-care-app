@@ -46,6 +46,7 @@ function normalizeStoredRelative(value: unknown, familyIndex: number): Relative 
     color: typeof value.color === "string"
       ? value.color
       : familyColors[familyIndex % familyColors.length],
+    photoUrl: typeof value.photoUrl === "string" ? value.photoUrl : null,
   };
 }
 
@@ -159,6 +160,7 @@ export function toRelativeInput(relative: {
   allergies: string[];
   notes: string;
   color?: string;
+  photoUrl?: string | null;
   medications?: readonly Medication[];
 }) {
   return {
@@ -170,6 +172,7 @@ export function toRelativeInput(relative: {
     allergies: relative.allergies,
     notes: relative.notes,
     color: relative.color,
+    photoUrl: relative.photoUrl,
     medications: relative.medications
       ?.map(normalizeMedication)
       .filter((medication) => medication.name)

@@ -37,6 +37,8 @@ export type RelativeInput = {
   allergies?: string[];
   notes?: string;
   color?: string;
+  /** A `data:image/...;base64,...` URI, or null/omitted for no photo. See `validatePhotoUrl`. */
+  photoUrl?: string | null;
   position?: number;
   medications?: MedicationInput[];
 };

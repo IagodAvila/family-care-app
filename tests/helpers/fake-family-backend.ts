@@ -38,6 +38,7 @@ type StoredRelative = {
   allergies: string[];
   notes: string;
   color: string;
+  photoUrl: string | null;
   medications: StoredMedication[];
 };
 
@@ -101,6 +102,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
       allergies: relative.allergies,
       notes: relative.notes,
       color: relative.color,
+      photoUrl: relative.photoUrl ?? null,
       medications: relative.medications.map((medication) => toStoredMedication(medication, makeId)),
     };
   }
@@ -157,6 +159,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
         allergies: body.allergies ?? [],
         notes: body.notes ?? "",
         color: body.color ?? "",
+        photoUrl: body.photoUrl ?? null,
         medications: (body.medications ?? []).map((medication: MedicationWireInput) => ({
           id: `medication-${nextId++}`,
           version: 1,
@@ -190,6 +193,9 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
           allergies: body.allergies ?? relative.allergies,
           notes: body.notes ?? relative.notes,
           color: body.color ?? relative.color,
+          // `photoUrl` can legitimately be cleared to null, unlike the other
+          // fields here — `??` would wrongly keep the old photo in that case.
+          photoUrl: "photoUrl" in body ? body.photoUrl : relative.photoUrl,
           version: relative.version + 1,
         });
         return jsonResponse({ relative });

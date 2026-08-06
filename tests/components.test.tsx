@@ -9,6 +9,15 @@ import { Modal } from "@/app/components/modal";
 import type { Relative } from "@/types/family";
 import { createFakeFamilyBackend } from "./helpers/fake-family-backend";
 
+// Real photo processing needs canvas/createImageBitmap, unavailable in jsdom
+// — the UI's job here is just to call it and thread the result through, so
+// a stub covers that without pulling in canvas support just for tests.
+const FAKE_PHOTO_DATA_URL = "data:image/jpeg;base64,ZmFrZS1waG90bw==";
+vi.mock("@/lib/photo", () => ({
+  MAX_PHOTO_FILE_SIZE: 12 * 1024 * 1024,
+  resizePhotoToDataUrl: vi.fn(async () => FAKE_PHOTO_DATA_URL),
+}));
+
 const LEGACY_STORAGE_KEY = "familycare-family";
 
 function ModalHarness() {
@@ -64,6 +73,7 @@ function storedRelative(overrides: Partial<Relative>): Relative {
     medications: [],
     notes: "",
     color: "#277f7b",
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -318,6 +328,42 @@ describe("fluxos críticos do FamilyCare", () => {
         dosage: "1 dose",
         orientation: "",
       });
+    });
+  });
+
+  test("adiciona, pré-visualiza e remove a foto de um familiar", async () => {
+    const user = userEvent.setup();
+    const backend = await renderApp([]);
+    const dialog = await openRelativeForm(user);
+
+    await fillRequiredRelativeFields(user, dialog, {
+      name: "Beatriz Lima",
+      relation: "Irmã",
+      birthDate: "15031988",
+      bloodType: "B+",
+    });
+
+    const photoInput = within(dialog).getByLabelText("Adicionar foto");
+    await user.upload(photoInput, new File(["conteúdo-fake"], "foto.jpg", { type: "image/jpeg" }));
+
+    // Label switches once a photo is staged, and a way to undo it appears.
+    expect(await within(dialog).findByLabelText("Trocar foto")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Remover foto" })).toBeTruthy();
+
+    await user.click(within(dialog).getByRole("button", { name: "Salvar familiar" }));
+    expect(await screen.findByRole("heading", { name: "Beatriz Lima", level: 2 })).toBeTruthy();
+    await waitFor(() => {
+      expect(backend.getRelatives()[0].photoUrl).toBe(FAKE_PHOTO_DATA_URL);
+    });
+
+    // Editing back in, removing the photo clears it on save.
+    await user.click(screen.getByRole("button", { name: "Editar familiar" }));
+    const editDialog = screen.getByRole("dialog", { name: "Editar familiar" });
+    await user.click(within(editDialog).getByRole("button", { name: "Remover foto" }));
+    await user.click(within(editDialog).getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => {
+      expect(backend.getRelatives()[0].photoUrl).toBeNull();
     });
   });
 });

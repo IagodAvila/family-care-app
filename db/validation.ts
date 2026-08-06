@@ -114,8 +114,24 @@ export function validateRelativeInput(
     allergies: textList(input.allergies),
     notes: optionalText(input.notes, 2_000),
     color: optionalText(input.color, 32),
+    photoUrl: validatePhotoUrl(input.photoUrl),
     position: position(input.position),
   };
+}
+
+/** Client-side resizing keeps real photos well under this; a hard cap here is just abuse protection. */
+const MAX_PHOTO_DATA_URL_LENGTH = 350_000;
+
+export function validatePhotoUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (
+    typeof value !== "string"
+    || value.length > MAX_PHOTO_DATA_URL_LENGTH
+    || !/^data:image\/(jpeg|png|webp);base64,/.test(value)
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return value;
 }
 
 export function validateExpectedVersion(value: number): number {

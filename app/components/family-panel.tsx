@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getAge, getInitials } from "@/lib/family-format";
+import { getAge } from "@/lib/family-format";
 import type { Relative } from "@/types/family";
+import { PersonAvatar } from "./person-avatar";
 
 type FamilyPanelProps = {
   family: Relative[];
@@ -64,9 +65,7 @@ export function FamilyPanel({
             type="button"
             onClick={() => onSelectRelative(person.id)}
           >
-            <span className="avatar" style={{ backgroundColor: person.color }}>
-              {getInitials(person.name)}
-            </span>
+            <PersonAvatar name={person.name} color={person.color} photoUrl={person.photoUrl} />
             <span className="person-summary">
               <strong>{person.name}</strong>
               <small>{person.relation} · {getAge(person.birthDate)} anos</small>

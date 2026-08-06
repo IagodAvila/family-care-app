@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   formatDate,
   getAge,
-  getInitials,
   getMedicationTiming,
 } from "@/lib/family-format";
 import type { Relative } from "@/types/family";
+import { PersonAvatar } from "./person-avatar";
 
 type MedicalRecordProps = {
   emergencyMode: boolean;
@@ -74,13 +74,12 @@ export function MedicalRecord({
         <div className="quick-family-switcher">
           <label htmlFor="quick-family-select">Familiar em emergência</label>
           <div className="quick-family-control">
-            <span
-              className="avatar quick-avatar"
-              style={{ backgroundColor: selected.color }}
-              aria-hidden="true"
-            >
-              {getInitials(selected.name)}
-            </span>
+            <PersonAvatar
+              name={selected.name}
+              color={selected.color}
+              photoUrl={selected.photoUrl}
+              className="quick-avatar"
+            />
             <select
               id="quick-family-select"
               value={selected.id}
@@ -99,12 +98,12 @@ export function MedicalRecord({
 
       <div className="record-header">
         <div className="identity">
-          <span
-            className="avatar avatar-large"
-            style={{ backgroundColor: selected.color }}
-          >
-            {getInitials(selected.name)}
-          </span>
+          <PersonAvatar
+            name={selected.name}
+            color={selected.color}
+            photoUrl={selected.photoUrl}
+            className="avatar-large"
+          />
           <div>
             <span className="relation-label">{selected.relation}</span>
             <h2>{selected.name}</h2>

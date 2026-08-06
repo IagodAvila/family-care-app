@@ -24,4 +24,6 @@ export type Relative = {
   medications: Medication[];
   notes: string;
   color: string;
+  /** A `data:image/...;base64,...` URI, or null/absent for no photo (falls back to initials). */
+  photoUrl?: string | null;
 };

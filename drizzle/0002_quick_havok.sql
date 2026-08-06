@@ -1,0 +1,1 @@
+ALTER TABLE `relatives` ADD `photo_url` text;

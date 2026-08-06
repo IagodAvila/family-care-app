@@ -148,6 +148,7 @@ export const relatives = sqliteTable(
       .default([]),
     notes: text("notes").notNull().default(""),
     color: text("color").notNull().default(""),
+    photoUrl: text("photo_url"),
     position: integer("position").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: text("created_by_user_id").references(() => users.id, {

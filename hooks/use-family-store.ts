@@ -48,6 +48,7 @@ type ServerRelative = {
   allergies: string[];
   notes: string;
   color: string;
+  photoUrl: string | null;
   medications: ServerMedication[];
 };
 
@@ -76,6 +77,7 @@ function fromServerRelative(row: ServerRelative, index: number): Relative {
     allergies: row.allergies,
     notes: row.notes,
     color: row.color || familyColors[index % familyColors.length],
+    photoUrl: row.photoUrl,
     medications: row.medications.map(fromServerMedication),
   };
 }
@@ -217,6 +219,7 @@ export function useFamilyStore() {
         allergies: parseList(data.get("allergies")),
         notes: String(data.get("notes") ?? ""),
         color: editingRelative?.color ?? familyColors[family.length % familyColors.length],
+        photoUrl: String(data.get("photoUrl") ?? "") || null,
       });
 
       if (editingId && editingRelative) {

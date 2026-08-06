@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useState } from "react";
 import {
   addMedicationToList,
   applyDateMask,
@@ -10,7 +10,9 @@ import {
   updateMedicationInList,
   validateBirthDate,
 } from "@/lib/family-data";
+import { MAX_PHOTO_FILE_SIZE, resizePhotoToDataUrl } from "@/lib/photo";
 import type { Medication, Relative } from "@/types/family";
+import { PersonAvatar } from "./person-avatar";
 
 type RelativeFormProps = {
   relative?: Relative;
@@ -38,6 +40,34 @@ export function RelativeForm({
   const [medicationError, setMedicationError] = useState("");
   const [medicationDraft, setMedicationDraft] = useState<Medication>(EMPTY_MEDICATION);
   const [editingMedicationIndex, setEditingMedicationIndex] = useState<number | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(relative?.photoUrl ?? null);
+  const [photoError, setPhotoError] = useState("");
+  const [processingPhoto, setProcessingPhoto] = useState(false);
+
+  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_FILE_SIZE) {
+      setPhotoError("A imagem é muito grande (máximo 12 MB).");
+      return;
+    }
+
+    setPhotoError("");
+    setProcessingPhoto(true);
+    try {
+      setPhotoUrl(await resizePhotoToDataUrl(file));
+    } catch {
+      setPhotoError("Não foi possível processar essa imagem. Tente outro arquivo.");
+    } finally {
+      setProcessingPhoto(false);
+    }
+  }
 
   function addTemporaryMedication() {
     if (!medicationDraft.name.trim()) {
@@ -67,6 +97,7 @@ export function RelativeForm({
 
     const data = new FormData(event.currentTarget);
     data.set("birthDate", result.internalDate ?? displayDateToInternal(birthDate));
+    data.set("photoUrl", photoUrl ?? "");
     onSave(data, medications);
   }
 
@@ -87,6 +118,27 @@ export function RelativeForm({
 
   return (
     <form onSubmit={submit}>
+      <div className="photo-field">
+        <PersonAvatar name={relative?.name ?? ""} color={relative?.color ?? "#277f7b"} photoUrl={photoUrl} className="avatar-large" />
+        <div className="photo-field-controls">
+          <div className="photo-actions">
+            <label className="photo-upload-label">
+              {photoUrl ? "Trocar foto" : "Adicionar foto"}
+              <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={processingPhoto} />
+            </label>
+            {photoUrl && (
+              <button type="button" className="remove-photo-button" onClick={() => setPhotoUrl(null)}>
+                Remover foto
+              </button>
+            )}
+          </div>
+          {processingPhoto && <p className="photo-processing">Processando imagem…</p>}
+          {photoError && (
+            <p className="field-error" role="alert">{photoError}</p>
+          )}
+        </div>
+      </div>
+
       <div className="form-grid">
         <label>
           Nome completo
@@ -260,7 +312,7 @@ export function RelativeForm({
 
       <div className="form-actions">
         <button type="button" onClick={onCancel}>Cancelar</button>
-        <button className="submit-button" type="submit">
+        <button className="submit-button" type="submit" disabled={processingPhoto}>
           {isEditing ? "Salvar alterações" : "Salvar familiar"}
         </button>
       </div>

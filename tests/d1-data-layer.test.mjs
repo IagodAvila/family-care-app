@@ -171,6 +171,36 @@ test("executa CRUD de familiar com concorrência otimista e exclusão lógica", 
   await expectDataError(service.getRelative(context, created.id), "NOT_FOUND");
 });
 
+test("salva e valida a foto do familiar (data URI)", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "photo-editor");
+  const validPhoto = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD";
+
+  const created = await service.createRelative(
+    context,
+    relativeInput({ photoUrl: validPhoto }),
+  );
+  assert.equal(created.photoUrl, validPhoto);
+
+  const withoutPhoto = await service.updateRelative(context, created.id, {
+    ...relativeInput({ photoUrl: null }),
+    expectedVersion: created.version,
+  });
+  assert.equal(withoutPhoto.photoUrl, null);
+
+  await expectDataError(
+    service.createRelative(context, relativeInput({ photoUrl: "not-a-data-uri" })),
+    "INVALID_INPUT",
+  );
+  await expectDataError(
+    service.createRelative(
+      context,
+      relativeInput({ photoUrl: `data:image/jpeg;base64,${"a".repeat(400_000)}` }),
+    ),
+    "INVALID_INPUT",
+  );
+});
+
 test("executa CRUD de medicamento sempre no escopo do familiar e da família", async () => {
   const { db, service } = await createTestContext();
   const { context } = await createFamilyFor(service, db, "medication-editor");
