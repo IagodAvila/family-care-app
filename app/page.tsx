@@ -121,16 +121,14 @@ export default function Home() {
   return (
     <main className={emergencyMode ? "app emergency-active" : "app"}>
       <AppHeader
-        emergencyMode={emergencyMode}
-        hasSelectedRelative={Boolean(selected)}
         user={user}
         onLogout={logout}
         onOpenMembers={() => setShowMembers(true)}
         onOpenPrivacy={() => setShowPrivacy(true)}
-        onToggleEmergency={toggleEmergencyMode}
       />
 
       <section className="app-intro" id="inicio">
+        <h1>Painel da família</h1>
         <p>Dados de saúde da família, sincronizados com segurança na sua conta.</p>
       </section>
 
@@ -152,6 +150,7 @@ export default function Home() {
             onEditRelative={openEditRelative}
             onRemoveMedication={setPendingMedicationIndex}
             onSelectRelative={selectRelative}
+            onToggleEmergency={toggleEmergencyMode}
           />
         ) : (
           <EmptyFamilyRecord onAddRelative={openAddRelative} />

@@ -2,9 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Droplet,
+  HeartPulse,
+  MoreHorizontal,
+  Pencil,
+  Pill,
+  Plus,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+import {
   formatDate,
   getAge,
   getMedicationTiming,
+  isNoDataValue,
+  NO_DATA_LABEL,
 } from "@/lib/family-format";
 import type { Relative } from "@/types/family";
 import { PersonAvatar } from "./person-avatar";
@@ -18,7 +30,10 @@ type MedicalRecordProps = {
   onEditRelative: () => void;
   onRemoveMedication: (index: number) => void;
   onSelectRelative: (id: string) => void;
+  onToggleEmergency: () => void;
 };
+
+const ICON_STROKE = 1.75;
 
 export function MedicalRecord({
   emergencyMode,
@@ -29,6 +44,7 @@ export function MedicalRecord({
   onEditRelative,
   onRemoveMedication,
   onSelectRelative,
+  onToggleEmergency,
 }: MedicalRecordProps) {
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const moreOptionsRef = useRef<HTMLDivElement>(null);
@@ -70,6 +86,22 @@ export function MedicalRecord({
 
   return (
     <article className="medical-record">
+      {/* The single most critical action on this screen — kept dominant and
+          on its own row rather than competing with the theme toggle/avatar
+          in the top bar. On mobile this becomes a fixed bottom bar (see
+          globals.css) so it stays reachable without scrolling back up. */}
+      <div className="emergency-bar">
+        <button
+          className={emergencyMode ? "emergency-button active" : "emergency-button"}
+          type="button"
+          onClick={onToggleEmergency}
+          aria-pressed={emergencyMode}
+        >
+          <TriangleAlert aria-hidden="true" size={18} strokeWidth={ICON_STROKE} />
+          {emergencyMode ? "Sair do modo emergência" : "Modo emergência"}
+        </button>
+      </div>
+
       {emergencyMode && (
         <div className="quick-family-switcher">
           <label htmlFor="quick-family-select">Familiar em emergência</label>
@@ -114,7 +146,8 @@ export function MedicalRecord({
         {!emergencyMode && (
           <div className="record-actions">
             <button className="edit-button" type="button" onClick={onEditRelative}>
-              <span aria-hidden="true">✎</span> Editar familiar
+              <Pencil aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+              Editar familiar
             </button>
             <div className="more-options" ref={moreOptionsRef}>
               <button
@@ -127,7 +160,7 @@ export function MedicalRecord({
                 aria-expanded={showMoreOptions}
                 onClick={() => setShowMoreOptions((current) => !current)}
               >
-                ⋯
+                <MoreHorizontal aria-hidden="true" size={18} strokeWidth={ICON_STROKE} />
               </button>
               {showMoreOptions && (
                 <div className="more-options-menu" id="more-options-popover">
@@ -148,50 +181,68 @@ export function MedicalRecord({
 
       <div className="vitals-grid">
         <section className="vital-card blood-card">
-          <span className="card-icon" aria-hidden="true">●</span>
+          <span className="card-icon" aria-hidden="true">
+            <Droplet size={18} strokeWidth={ICON_STROKE} />
+          </span>
           <div>
             <small>Tipo sanguíneo</small>
             <strong>{selected.bloodType}</strong>
           </div>
         </section>
         <section className="vital-card">
-          <span className="card-icon heart" aria-hidden="true">♥</span>
+          <span className="card-icon heart" aria-hidden="true">
+            <HeartPulse size={18} strokeWidth={ICON_STROKE} />
+          </span>
           <div>
             <small>Comorbidades</small>
-            <div className="chips">
-              {selected.conditions.length
-                ? selected.conditions.map((item) => <span key={item}>{item}</span>)
-                : <span className="chip-neutral">Nenhuma informada</span>}
-            </div>
+            {selected.conditions.length ? (
+              <div className="chips">
+                {selected.conditions.map((item) => (
+                  <span key={item} className={isNoDataValue(item) ? "chip-none" : undefined}>
+                    {isNoDataValue(item) ? NO_DATA_LABEL : item}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className="chip-cta" onClick={onEditRelative}>
+                <TriangleAlert aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+                Registrar comorbidades
+              </button>
+            )}
           </div>
         </section>
         <section className="vital-card allergy-card">
-          <span className="card-icon" aria-hidden="true">!</span>
+          <span className="card-icon alert" aria-hidden="true">
+            <TriangleAlert size={18} strokeWidth={ICON_STROKE} />
+          </span>
           <div>
             <small>Alergias</small>
-            <div className="chips">
-              {selected.allergies.length
-                ? selected.allergies.map((item) => <span key={item}>{item}</span>)
-                : <span className="chip-neutral">Nenhuma informada</span>}
-            </div>
+            {selected.allergies.length ? (
+              <div className="chips">
+                {selected.allergies.map((item) => (
+                  <span key={item} className={isNoDataValue(item) ? "chip-none" : undefined}>
+                    {isNoDataValue(item) ? NO_DATA_LABEL : item}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className="chip-cta" onClick={onEditRelative}>
+                <TriangleAlert aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+                Registrar alergias
+              </button>
+            )}
           </div>
         </section>
       </div>
 
       <section className="medications-section">
         <div className="section-heading">
-          <div>
-            <p className="eyebrow">{emergencyMode ? "Consulta rápida" : "Uso contínuo"}</p>
-            <h3>{emergencyMode ? "Medicamentos em uso" : "Medicamentos"}</h3>
-          </div>
+          <h3>{emergencyMode ? "Medicamentos em uso" : "Medicamentos"}</h3>
           {!emergencyMode && (
             <div className="medication-heading-actions">
-              <span>
-                {selected.medications.length}{" "}
-                {selected.medications.length === 1 ? "medicamento" : "medicamentos"}
-              </span>
               <button type="button" onClick={onAddMedication}>
-                <span aria-hidden="true">＋</span> Adicionar
+                <Plus aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+                Adicionar
               </button>
             </div>
           )}
@@ -204,7 +255,9 @@ export function MedicalRecord({
                 className="medication-row"
                 key={`${medication.name}-${medication.dosage}-${index}`}
               >
-                <span className="pill-icon" aria-hidden="true">◐</span>
+                <span className="pill-icon" aria-hidden="true">
+                  <Pill size={17} strokeWidth={ICON_STROKE} />
+                </span>
                 <div>
                   <strong>{medication.name}</strong>
                   <small>{getMedicationTiming(medication)}</small>
@@ -218,7 +271,7 @@ export function MedicalRecord({
                     title={`Remover ${medication.name}`}
                     onClick={() => onRemoveMedication(index)}
                   >
-                    ×
+                    <X aria-hidden="true" size={16} strokeWidth={ICON_STROKE} />
                   </button>
                 )}
               </div>

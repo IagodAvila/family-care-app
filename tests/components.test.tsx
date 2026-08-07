@@ -225,7 +225,7 @@ describe("fluxos críticos do FamilyCare", () => {
     await user.click(screen.getByRole("button", { name: /Bruno Souza/ }));
     expect(screen.getByRole("heading", { name: "Bruno Souza", level: 2 })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Ativar modo emergência" }));
+    await user.click(screen.getByRole("button", { name: "Modo emergência" }));
     expect(document.querySelector("main")?.className).toContain("emergency-active");
 
     const emergencySwitcher = screen.getByRole("combobox", {

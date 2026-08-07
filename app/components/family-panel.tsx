@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getAge } from "@/lib/family-format";
 import type { Relative } from "@/types/family";
 import { PersonAvatar } from "./person-avatar";
@@ -19,21 +20,40 @@ export function FamilyPanel({
   onSelectRelative,
 }: FamilyPanelProps) {
   const [query, setQuery] = useState("");
-  const filtered = useMemo(
-    () =>
-      family.filter((person) =>
-        `${person.name} ${person.relation}`.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [family, query],
-  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // "/" focuses search from anywhere on the page, unless the user is
+  // already typing somewhere else — a common list-filter shortcut.
+  useEffect(() => {
+    function focusSearchOnSlash(event: KeyboardEvent) {
+      if (event.key !== "/") return;
+      const target = event.target as HTMLElement | null;
+      const isTyping = target
+        && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
+      if (isTyping) return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    }
+
+    document.addEventListener("keydown", focusSearchOnSlash);
+    return () => document.removeEventListener("keydown", focusSearchOnSlash);
+  }, []);
+
+  // Alphabetical by name — a fixed, predictable order rather than raw
+  // insertion order, with no picker needed to explain it.
+  const sorted = useMemo(() => {
+    const filtered = family.filter((person) =>
+      `${person.name} ${person.relation}`.toLowerCase().includes(query.toLowerCase()),
+    );
+
+    return filtered.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [family, query]);
 
   return (
     <aside className="family-panel">
       <div className="panel-title">
-        <div>
-          <p className="eyebrow">Minha rede</p>
-          <h2>Familiares</h2>
-        </div>
+        <h2>Familiares</h2>
         <div className="family-panel-actions">
           <span>{family.length}</span>
           <button
@@ -42,23 +62,25 @@ export function FamilyPanel({
             onClick={onAddRelative}
             aria-label="Adicionar familiar"
           >
-            <span aria-hidden="true">＋</span>
+            <Plus aria-hidden="true" size={15} strokeWidth={1.75} />
             <span className="add-relative-label">Adicionar</span>
           </button>
         </div>
       </div>
 
       <label className="search">
-        <span aria-hidden="true">⌕</span>
+        <Search aria-hidden="true" size={15} strokeWidth={1.75} />
         <input
+          ref={searchInputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar familiar"
         />
+        {!query && <kbd className="search-hint" aria-hidden="true">/</kbd>}
       </label>
 
       <div className="family-list" role="region" aria-label="Lista de familiares" tabIndex={0}>
-        {filtered.map((person) => (
+        {sorted.map((person) => (
           <button
             className={person.id === selectedId ? "person-card selected" : "person-card"}
             key={person.id}
@@ -74,7 +96,13 @@ export function FamilyPanel({
           </button>
         ))}
 
-        {!filtered.length && <p className="empty-state">Nenhum familiar encontrado.</p>}
+        {!sorted.length && (
+          <p className="empty-state">
+            {family.length
+              ? `Nenhum familiar encontrado para "${query}".`
+              : "Nenhum familiar cadastrado ainda."}
+          </p>
+        )}
       </div>
     </aside>
   );
