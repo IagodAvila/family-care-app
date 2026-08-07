@@ -10,6 +10,7 @@ import {
   updateMedicationInList,
   validateBirthDate,
 } from "@/lib/family-data";
+import { isNoDataValue, NO_DATA_LABEL } from "@/lib/family-format";
 import { MAX_PHOTO_FILE_SIZE, resizePhotoToDataUrl } from "@/lib/photo";
 import type { Medication, Relative } from "@/types/family";
 import { PersonAvatar } from "./person-avatar";
@@ -23,6 +24,62 @@ type RelativeFormProps = {
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Não sei"];
 const EMPTY_MEDICATION: Medication = { name: "", dosage: "", orientation: "" };
+
+type YesNoFieldProps = {
+  label: string;
+  name: string;
+  placeholder: string;
+  initialValues: string[];
+};
+
+/**
+ * Comorbidades/Alergias: a written list, or a flat "Não possui" — asked for
+ * explicitly rather than inferred from an empty field, so a blank field
+ * still reads as "not filled in yet" instead of "checked, has none".
+ * Whichever synonym is already stored (see `isNoDataValue`) still lands
+ * back on the "Não possui" toggle when editing, so re-saving standardizes
+ * older entries onto the current wording.
+ */
+function YesNoField({ label, name, placeholder, initialValues }: YesNoFieldProps) {
+  const initialIsNone = initialValues.length === 1 && isNoDataValue(initialValues[0]);
+  const [mode, setMode] = useState<"describe" | "none">(initialIsNone ? "none" : "describe");
+  const [text, setText] = useState(initialIsNone ? "" : initialValues.join(", "));
+
+  return (
+    <div className="full field-group">
+      <span className="field-group-label">{label}</span>
+      <div className="field-mode-toggle" role="group" aria-label={`Status: ${label}`}>
+        <button
+          type="button"
+          className={mode === "describe" ? "active" : undefined}
+          aria-pressed={mode === "describe"}
+          onClick={() => setMode("describe")}
+        >
+          Descrever
+        </button>
+        <button
+          type="button"
+          className={mode === "none" ? "active" : undefined}
+          aria-pressed={mode === "none"}
+          onClick={() => setMode("none")}
+        >
+          Não possui
+        </button>
+      </div>
+      {mode === "describe" ? (
+        <input
+          name={name}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={placeholder}
+          aria-label={label}
+        />
+      ) : (
+        <input type="hidden" name={name} value={NO_DATA_LABEL} />
+      )}
+    </div>
+  );
+}
 
 export function RelativeForm({
   relative,
@@ -189,22 +246,18 @@ export function RelativeForm({
             {BLOOD_TYPES.map((type) => <option key={type}>{type}</option>)}
           </select>
         </label>
-        <label className="full">
-          Comorbidades, separadas por vírgula
-          <input
-            name="conditions"
-            placeholder="Hipertensão, diabetes"
-            defaultValue={relative?.conditions.join(", ") ?? ""}
-          />
-        </label>
-        <label className="full">
-          Alergias, separadas por vírgula
-          <input
-            name="allergies"
-            placeholder="Dipirona, amoxicilina"
-            defaultValue={relative?.allergies.join(", ") ?? ""}
-          />
-        </label>
+        <YesNoField
+          label="Comorbidades, separadas por vírgula"
+          name="conditions"
+          placeholder="Hipertensão, diabetes"
+          initialValues={relative?.conditions ?? []}
+        />
+        <YesNoField
+          label="Alergias, separadas por vírgula"
+          name="allergies"
+          placeholder="Dipirona, amoxicilina"
+          initialValues={relative?.allergies ?? []}
+        />
       </div>
 
       <fieldset>

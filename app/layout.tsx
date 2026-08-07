@@ -1,9 +1,26 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Manrope, Sora } from "next/font/google";
 import { resolveInitialThemeScript, THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
 
 const THEME_INIT_SCRIPT = resolveInitialThemeScript(THEME_STORAGE_KEY);
+
+// Sora for titles (used at weight 600 throughout), Manrope for body copy —
+// exposed as CSS variables so globals.css can reference them with a plain
+// system-font fallback chain if a font ever fails to load.
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-heading",
+  display: "swap",
+});
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const incomingHeaders = await headers();
@@ -36,7 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>
+      <body className={`${sora.variable} ${manrope.variable}`}>
         {/* Blocking script, runs before hydration: sets `data-theme` on
             <html> from the stored preference (or the OS preference on a
             first visit) so the page never flashes the wrong theme. */}

@@ -70,10 +70,15 @@ test("prioriza o modo emergência e mantém ações destrutivas em menu secundá
     readFile(new URL("app/components/modal.tsx", projectRoot), "utf8"),
   ]);
 
-  assert.match(page, /className=\{emergencyMode \? "emergency-top-button active" : "emergency-top-button"\}/);
+  // The emergency toggle lives on the selected relative's own record panel
+  // now (dominant button there, fixed bottom bar on mobile — see
+  // globals.css), not competing with the theme toggle/avatar in the top
+  // bar. It only renders once a relative is selected, so there is no
+  // disabled/placeholder state to test for.
+  assert.match(page, /className=\{emergencyMode \? "emergency-button active" : "emergency-button"\}/);
   assert.match(page, /aria-pressed=\{emergencyMode\}/);
-  assert.match(page, /disabled=\{!hasSelectedRelative\}/);
   assert.match(page, /Sair do modo emergência/);
+  assert.match(css, /\.emergency-bar \{[^}]*position: fixed;[^}]*bottom: 0;/);
   assert.match(page, /className="add-relative-compact"/);
   assert.match(page, /aria-label="Adicionar familiar"/);
   assert.doesNotMatch(page, /<span aria-hidden="true">!<\/span> \{emergencyMode/);
@@ -164,17 +169,15 @@ test("mantém armazenamento como informação global e preserva o estado vazio",
   assert.match(page, /<button className="submit-button" type="button" onClick=\{onAddRelative\}>[\s\S]*Adicionar familiar[\s\S]*<\/button>/);
 });
 
-test("mantém nome acessível completo e rótulo curto de emergência em 320 px", async () => {
+test("mantém o botão de emergência acessível e como barra fixa no mobile", async () => {
   const [page, css] = await Promise.all([
     readUiSource(),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
-  assert.match(page, /aria-label=\{emergencyMode \? "Sair do modo emergência" : "Ativar modo emergência"\}/);
-  assert.match(page, /className="emergency-label-mobile">Sair da emergência/);
-  assert.match(css, /@media \(max-width: 350px\)/);
-  assert.match(css, /\.emergency-label-full \{ display: none; \}/);
-  assert.match(css, /\.emergency-label-mobile \{ display: inline; \}/);
+  assert.match(page, /aria-pressed=\{emergencyMode\}/);
+  assert.match(page, /\{emergencyMode \? "Sair do modo emergência" : "Modo emergência"\}/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.emergency-bar \{[^}]*position: fixed;/);
   assert.match(css, /:focus-visible \{ outline: 3px solid #0b6f69;/);
 });
 

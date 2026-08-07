@@ -31,3 +31,19 @@ export function getMedicationTiming(medication: Medication) {
   const normalized = normalizeMedication(medication);
   return normalized.orientation || "Orientação de uso não informada";
 }
+
+/** The standardized value for "no known conditions/allergies" — see the Descrever/Não possui toggle on those fields in RelativeForm. */
+export const NO_DATA_LABEL = "Não possui";
+
+/**
+ * Older entries may have been saved as "Não tem" (or without the accent)
+ * before the field was standardized on "Não possui". Recognized here so
+ * they still render with the neutral chip color and, once the record is
+ * re-saved, land back on the current wording via the form's toggle.
+ */
+const NO_DATA_SYNONYMS = new Set(["não possui", "nao possui", "não tem", "nao tem"]);
+
+/** Whether a condition/allergy entry is that "none" marker rather than a real item — used to give it a neutral (not alarming) chip color. */
+export function isNoDataValue(value: string) {
+  return NO_DATA_SYNONYMS.has(value.trim().toLowerCase());
+}
