@@ -2,7 +2,7 @@ export function MedicationFields() {
   return (
     <div className="form-grid medication-fields">
       <label>
-        Nome
+        <span className="field-label-text">Nome</span>
         <input name="name" required placeholder="Ex.: Losartana" />
       </label>
       <label>

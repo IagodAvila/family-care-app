@@ -85,7 +85,7 @@ export function MedicalRecord({
   }
 
   return (
-    <article className="medical-record">
+    <article className="medical-record" id="ficha-familiar">
       {/* The single most critical action on this screen — kept dominant and
           on its own row rather than competing with the theme toggle/avatar
           in the top bar. On mobile this becomes a fixed bottom bar (see

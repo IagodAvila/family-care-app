@@ -106,6 +106,29 @@ export default function Home() {
     if (selected) setEmergencyMode((current) => !current);
   }
 
+  // On mobile the family list and the record panel are stacked in one long
+  // page (see the single-scroll layout below), so picking someone from a
+  // list further up can leave their record off-screen below — scroll it
+  // into view so the connection between "who I tapped" and "what appeared"
+  // stays obvious. Desktop already shows both side by side, so it's a
+  // no-op there.
+  function selectRelativeFromList(id: string) {
+    selectRelative(id);
+    // matchMedia is unavailable in the jsdom test environment (and, in
+    // principle, any very old browser) — treat that as "not mobile" rather
+    // than throwing.
+    if (typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => {
+      document.getElementById("ficha-familiar")?.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }
+
   if (authState === "loading") {
     return (
       <main className="app app-loading">
@@ -127,17 +150,18 @@ export default function Home() {
         onOpenPrivacy={() => setShowPrivacy(true)}
       />
 
-      <section className="app-intro" id="inicio">
-        <h1>Painel da família</h1>
-        <p>Dados de saúde da família, sincronizados com segurança na sua conta.</p>
-      </section>
+      {/* Visually hidden — the app name in the header already carries that
+          job, this just keeps a single real <h1> landmark on the page and
+          an anchor for the header's "início" link, without spending space
+          on a title that repeated it. */}
+      <h1 className="sr-only" id="inicio">FamilyCare — painel da família</h1>
 
       <section className="workspace" id="familiares">
         <FamilyPanel
           family={family}
           selectedId={selected?.id}
           onAddRelative={openAddRelative}
-          onSelectRelative={selectRelative}
+          onSelectRelative={selectRelativeFromList}
         />
 
         {selected ? (

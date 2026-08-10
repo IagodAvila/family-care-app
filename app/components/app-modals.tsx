@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import type { Medication, Relative } from "@/types/family";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MedicationFields } from "./medication-fields";
@@ -24,7 +24,7 @@ type AppModalsProps = {
   onCloseRelativeForm: () => void;
   onConfirmDeleteRelative: () => void;
   onConfirmRemoveMedication: () => void;
-  onSaveRelative: (data: FormData, medications: Medication[]) => void;
+  onSaveRelative: (data: FormData, medications: Medication[]) => void | Promise<void>;
 };
 
 export function AppModals({
@@ -49,10 +49,19 @@ export function AppModals({
   const pendingMedication = pendingMedicationIndex !== null
     ? selected?.medications[pendingMedicationIndex]
     : undefined;
+  const [addingMedication, setAddingMedication] = useState(false);
   async function addMedication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const wasAdded = await onAddMedication(new FormData(event.currentTarget));
-    if (wasAdded) onCloseMedicationForm();
+    // Same guard as RelativeForm's submit: without it, a slow request plus
+    // an impatient second click can create the medication twice.
+    if (addingMedication) return;
+    setAddingMedication(true);
+    try {
+      const wasAdded = await onAddMedication(new FormData(event.currentTarget));
+      if (wasAdded) onCloseMedicationForm();
+    } finally {
+      setAddingMedication(false);
+    }
   }
 
   return (
@@ -104,9 +113,11 @@ export function AppModals({
           <form onSubmit={addMedication}>
             <MedicationFields />
             <div className="form-actions">
-              <button type="button" onClick={onCloseMedicationForm}>Cancelar</button>
-              <button className="submit-button" type="submit">
-                Adicionar medicamento
+              <button type="button" onClick={onCloseMedicationForm} disabled={addingMedication}>
+                Cancelar
+              </button>
+              <button className="submit-button" type="submit" disabled={addingMedication}>
+                {addingMedication ? "Adicionando…" : "Adicionar medicamento"}
               </button>
             </div>
           </form>
