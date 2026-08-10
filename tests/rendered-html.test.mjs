@@ -99,7 +99,9 @@ test("prioriza o modo emergência e mantém ações destrutivas em menu secundá
   assert.match(page, /Selecionar familiar no modo emergência/);
   assert.match(page, /onChange=\{\(event\) => onSelectRelative\(event\.target\.value\)\}/);
   assert.match(page, /todos os dados de .*incluindo medicamentos/i);
-  assert.match(css, /\.app-intro \{[^}]*padding: 16px 0 0/);
+  // A single real <h1> landmark, kept off-screen — the header's app name
+  // already carries that job visually, no need to spend space repeating it.
+  assert.match(page, /<h1 className="sr-only" id="inicio">/);
   assert.doesNotMatch(css, /\.hero \{ min-height: 246px/);
   assert.match(modal, /role="dialog"/);
   assert.match(modal, /aria-modal="true"/);
@@ -135,8 +137,11 @@ test("mantém muitos familiares em lista vertical responsiva e nomes longos cont
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
-  assert.match(page, /role="region" aria-label="Lista de familiares" tabIndex=\{0\}/);
-  assert.match(css, /\.family-list \{[^}]*max-height:[^}]*overflow-y: auto;[^}]*overflow-x: hidden;/);
+  assert.match(page, /role="region" aria-label="Lista de familiares"/);
+  // One scroll for the whole page — the family list grows to its natural
+  // height instead of scrolling inside its own nested region.
+  assert.doesNotMatch(css, /\.family-list \{[^}]*overflow-y: auto/);
+  assert.doesNotMatch(css, /\.family-list \{[^}]*max-height/);
   assert.match(css, /\.person-card \{[^}]*min-width: 0;[^}]*overflow: hidden;/);
   assert.match(css, /\.person-summary strong, \.person-summary small \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
   assert.doesNotMatch(css, /\.family-list \{[^}]*grid-template-columns: repeat\(3/);

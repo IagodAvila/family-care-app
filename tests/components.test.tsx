@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { useState } from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import Home from "@/app/page";
@@ -187,6 +187,44 @@ describe("fluxos críticos do FamilyCare", () => {
       expect(backend.getRelatives()).toHaveLength(1);
       expect(backend.getRelatives()[0].medications).toHaveLength(2);
     });
+  });
+
+  test("não duplica o familiar se salvar for clicado de novo enquanto o pedido anterior ainda está em curso", async () => {
+    const user = userEvent.setup();
+    const backend = await renderApp([]);
+    const dialog = await openRelativeForm(user);
+
+    await fillRequiredRelativeFields(user, dialog, {
+      name: "Carlos Lima",
+      relation: "Pai",
+      birthDate: "10051970",
+      bloodType: "O+",
+    });
+
+    // Simulate a slow request: the create call takes a moment to resolve,
+    // long enough for an impatient second click to land while the button
+    // should already be disabled (see `submitting` in RelativeForm).
+    const realFetch = backend.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = input instanceof Request ? input.method : init?.method;
+      const url = input instanceof Request ? input.url : String(input);
+      if (method === "POST" && url.includes("/relatives")) {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+      return realFetch(input, init);
+    });
+
+    const saveButton = within(dialog).getByRole("button", { name: "Salvar familiar" });
+    fireEvent.click(saveButton);
+    // The button disables and relabels itself synchronously, before the
+    // request even resolves — so this second click lands on a disabled
+    // button and should have no effect at all.
+    fireEvent.click(saveButton);
+
+    expect(within(dialog).getByRole("button", { name: "Salvando…" })).toBeTruthy();
+
+    expect(await screen.findByRole("heading", { name: "Carlos Lima", level: 2 })).toBeTruthy();
+    await waitFor(() => expect(backend.getRelatives()).toHaveLength(1));
   });
 
   test("oferece importar dados salvos de uma versão anterior, troca familiar e ativa o modo emergência", async () => {

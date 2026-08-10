@@ -79,7 +79,7 @@ export function FamilyPanel({
         {!query && <kbd className="search-hint" aria-hidden="true">/</kbd>}
       </label>
 
-      <div className="family-list" role="region" aria-label="Lista de familiares" tabIndex={0}>
+      <div className="family-list" role="region" aria-label="Lista de familiares">
         {sorted.map((person) => (
           <button
             className={person.id === selectedId ? "person-card selected" : "person-card"}

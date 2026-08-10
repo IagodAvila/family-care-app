@@ -19,7 +19,7 @@ type RelativeFormProps = {
   relative?: Relative;
   isEditing: boolean;
   onCancel: () => void;
-  onSave: (data: FormData, medications: Medication[]) => void;
+  onSave: (data: FormData, medications: Medication[]) => void | Promise<void>;
 };
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Não sei"];
@@ -100,6 +100,7 @@ export function RelativeForm({
   const [photoUrl, setPhotoUrl] = useState<string | null>(relative?.photoUrl ?? null);
   const [photoError, setPhotoError] = useState("");
   const [processingPhoto, setProcessingPhoto] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -143,10 +144,14 @@ export function RelativeForm({
     setEditingMedicationIndex(null);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const result = validateBirthDate(birthDate);
+    // A slow save shouldn't invite a second click that creates a duplicate
+    // — the button below is disabled while this is in flight, but the
+    // guard here covers any other way the form could re-submit meanwhile.
+    if (submitting) return;
 
+    const result = validateBirthDate(birthDate);
     if (result.error) {
       setBirthDateError(result.error);
       return;
@@ -155,7 +160,12 @@ export function RelativeForm({
     const data = new FormData(event.currentTarget);
     data.set("birthDate", result.internalDate ?? displayDateToInternal(birthDate));
     data.set("photoUrl", photoUrl ?? "");
-    onSave(data, medications);
+    setSubmitting(true);
+    try {
+      await onSave(data, medications);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function editTemporaryMedication(medication: Medication, index: number) {
@@ -196,9 +206,11 @@ export function RelativeForm({
         </div>
       </div>
 
+      <p className="required-legend">* Campos obrigatórios</p>
+
       <div className="form-grid">
         <label>
-          Nome completo
+          <span className="field-label-text">Nome completo</span>
           <input
             name="name"
             required
@@ -207,7 +219,7 @@ export function RelativeForm({
           />
         </label>
         <label>
-          Parentesco
+          <span className="field-label-text">Parentesco</span>
           <input
             name="relation"
             required
@@ -216,7 +228,7 @@ export function RelativeForm({
           />
         </label>
         <label>
-          Data de nascimento
+          <span className="field-label-text">Data de nascimento</span>
           <input
             id="birthDate"
             name="birthDateDisplay"
@@ -240,7 +252,7 @@ export function RelativeForm({
           )}
         </label>
         <label>
-          Tipo sanguíneo
+          <span className="field-label-text">Tipo sanguíneo</span>
           <select name="bloodType" required defaultValue={relative?.bloodType ?? ""}>
             <option value="" disabled>Selecione</option>
             {BLOOD_TYPES.map((type) => <option key={type}>{type}</option>)}
@@ -364,9 +376,9 @@ export function RelativeForm({
       </label>
 
       <div className="form-actions">
-        <button type="button" onClick={onCancel}>Cancelar</button>
-        <button className="submit-button" type="submit" disabled={processingPhoto}>
-          {isEditing ? "Salvar alterações" : "Salvar familiar"}
+        <button type="button" onClick={onCancel} disabled={submitting}>Cancelar</button>
+        <button className="submit-button" type="submit" disabled={processingPhoto || submitting}>
+          {submitting ? "Salvando…" : isEditing ? "Salvar alterações" : "Salvar familiar"}
         </button>
       </div>
     </form>
