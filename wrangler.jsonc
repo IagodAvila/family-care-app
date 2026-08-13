@@ -10,5 +10,14 @@
   },
   "images": {
     "binding": "IMAGES"
+  },
+  // Powers the "Preenchimento assistido" (AI-assisted fill-in) feature on
+  // the relative form — free-tier inference, no API key/billing needed.
+  // `remote: true` is required even here in production config — without
+  // it, local dev (`wrangler dev`/the Cloudflare Vite plugin) reports the
+  // binding as "not supported" instead of proxying to the real service.
+  "ai": {
+    "binding": "AI",
+    "remote": true
   }
 }

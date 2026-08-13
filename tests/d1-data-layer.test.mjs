@@ -504,6 +504,18 @@ test("rejeita convite duplicado pendente para o mesmo e-mail", async () => {
   );
 });
 
+test("rejeita convite com e-mail mal formado", async () => {
+  const { db, service } = await createTestContext();
+  const { context } = await createFamilyFor(service, db, "invite-admin-invalid");
+
+  for (const badEmail of ["", "não-é-um-email", "sem-arroba.example", "@sem-usuario.example", "espaco @invalid.example"]) {
+    await expectDataError(
+      service.createInvitation(context, { emailNormalized: badEmail, role: "viewer" }),
+      "INVALID_INPUT",
+    );
+  }
+});
+
 test("somente administrador convida, lista e revoga convites", async () => {
   const { db, service } = await createTestContext();
   const { family, context: adminContext } = await createFamilyFor(service, db, "invite-admin-6");

@@ -145,6 +145,13 @@ footer button { margin-left: auto; border: 0; background: none; color: var(--tea
 .photo-upload-label input[type="file"] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .remove-photo-button { border: 0; background: transparent; padding: 0; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: underline; }
 .photo-processing { margin: 0; color: var(--muted); font-size: 12px; }
+.ai-assist { margin: 0 0 18px; padding: 14px; border: 1px dashed #b8d9d4; border-radius: 13px; background: var(--mint); }
+.ai-assist textarea { min-height: 56px; background: white; }
+.ai-assist-actions { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ai-assist-actions button { border: 0; border-radius: 9px; padding: 9px 13px; background: var(--teal); color: white; font-size: 12px; font-weight: 800; }
+.ai-assist-actions button:disabled { cursor: not-allowed; background: #9bc9c3; }
+.ai-assist-hint { color: var(--teal-dark); font-size: 11px; }
+.ai-assist-note { margin: 10px 0 0; color: var(--teal-dark); font-size: 12px; font-weight: 700; }
 .required-legend { margin: 0 0 14px; color: var(--muted); font-size: 11px; }
 /* The "*" is generated content, not label text — real screen readers do
    include ::after content in the accessible name (redundant with the
@@ -310,6 +317,9 @@ input, select, textarea, .form-actions button) { background: var(--surface-soft)
 :root[data-theme="dark"] :is(form label, .field-group) { color: #b4bcc0; }
 :root[data-theme="dark"] .field-mode-toggle button { background: var(--surface-soft); border-color: var(--line); color: #a1abb0; }
 :root[data-theme="dark"] .field-mode-toggle button.active { border-color: #33645c; background: var(--mint); color: var(--teal-dark); }
+:root[data-theme="dark"] .ai-assist { border-color: #33645c; }
+:root[data-theme="dark"] .ai-assist textarea { background: var(--surface-soft); }
+:root[data-theme="dark"] .ai-assist-actions button:disabled { background: #3f5b57; }
 :root[data-theme="dark"] :is(.person-summary small, .vital-card small,
 .medication-row small, .empty-medications, footer,
 .temporary-medication-list small) { color: #a1abb0; }

@@ -12,7 +12,7 @@
     "test": "npm run build && npm run test:unit && npm run test:components",
     "test:unit": "node --experimental-strip-types --test --experimental-test-isolation=none tests/*.test.mjs",
     "test:components": "vitest run tests/components.test.tsx --reporter=verbose",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .wrangler",
     "db:generate": "drizzle-kit generate",
     "deploy": "vinext build && wrangler deploy"
   },
