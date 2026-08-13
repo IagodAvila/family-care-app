@@ -5,10 +5,18 @@ import { eq } from "drizzle-orm";
 import { createDb } from "../db/index.ts";
 import { FamilyCareDataError } from "../db/errors.ts";
 import {
+  deleteExpiredSubscription,
+  findDueSchedules,
+  listActivePushSubscriptionsForFamily,
+  recordNotifiedOccurrence,
+} from "../db/queries/reminders.ts";
+import {
   auditEvents,
   families,
   familyMembers,
+  medicationDoses,
   medications,
+  pushSubscriptions,
   relatives,
   users,
 } from "../db/schema.ts";
@@ -17,6 +25,9 @@ import {
   applyMigrations,
   LocalD1Database,
 } from "./helpers/d1-database.mjs";
+
+// 2027-01-15 05:00:00 in America/Sao_Paulo (a Friday) — see tests/time.test.mjs.
+const FIXED_NOW = 1_800_000_000_000;
 
 const databases = [];
 
@@ -35,6 +46,20 @@ async function createTestContext() {
   const service = new FamilyCareDataService(db, {
     createId: () => `generated-${++nextId}`,
     now: () => 1_800_000_000_000 + nextId,
+  });
+  return { binding, db, service };
+}
+
+/** Same as `createTestContext`, but `now()` is pinned to `FIXED_NOW` — needed for schedule/dose tests, which are sensitive to the actual date/weekday. */
+async function createFixedClockTestContext() {
+  const binding = new LocalD1Database();
+  databases.push(binding);
+  await applyMigrations(binding);
+  const db = createDb(binding);
+  let nextId = 0;
+  const service = new FamilyCareDataService(db, {
+    createId: () => `fixed-generated-${++nextId}`,
+    now: () => FIXED_NOW,
   });
   return { binding, db, service };
 }
@@ -109,7 +134,10 @@ test("aplica a migration completa em um banco vazio", async () => {
     "families",
     "family_members",
     "invitations",
+    "medication_doses",
+    "medication_schedules",
     "medications",
+    "push_subscriptions",
     "relatives",
     "users",
   ]);
@@ -229,6 +257,150 @@ test("executa CRUD de medicamento sempre no escopo do familiar e da família", a
     service.getMedication(context, created.id),
     "NOT_FOUND",
   );
+});
+
+test("executa CRUD de horário de medicamento com concorrência otimista e exclusão lógica", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "schedule-editor");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const created = await service.createSchedule(context, medication.id, {
+    timeOfDay: "08:00",
+    daysOfWeek: [1, 3, 5],
+    quantity: 2,
+  });
+  assert.equal(created.timeOfDay, "08:00");
+  assert.deepEqual(created.daysOfWeek, [1, 3, 5]);
+  assert.equal(created.quantity, 2);
+
+  assert.equal((await service.listSchedules(context, medication.id))[0].id, created.id);
+
+  const updated = await service.updateSchedule(context, created.id, {
+    timeOfDay: "09:30",
+    daysOfWeek: [1, 2, 3, 4, 5],
+    quantity: 1,
+    expectedVersion: created.version,
+  });
+  assert.equal(updated.version, 2);
+  assert.equal(updated.timeOfDay, "09:30");
+
+  await expectDataError(
+    service.updateSchedule(context, created.id, {
+      timeOfDay: "10:00",
+      expectedVersion: created.version, // stale — already bumped to 2 above
+    }),
+    "CONFLICT",
+  );
+
+  await service.deleteSchedule(context, created.id, updated.version);
+  assert.deepEqual(await service.listSchedules(context, medication.id), []);
+  await expectDataError(service.getSchedule(context, created.id), "NOT_FOUND");
+});
+
+test("rejeita horário de medicamento com formato ou dias da semana inválidos", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "schedule-validator");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  await expectDataError(
+    service.createSchedule(context, medication.id, { timeOfDay: "25:00" }),
+    "INVALID_INPUT",
+  );
+  await expectDataError(
+    service.createSchedule(context, medication.id, { timeOfDay: "08:00", daysOfWeek: [0] }),
+    "INVALID_INPUT",
+  );
+  await expectDataError(
+    service.createSchedule(context, medication.id, { timeOfDay: "08:00", quantity: 0 }),
+    "INVALID_INPUT",
+  );
+});
+
+test("registra dose tomada sem duplicar ao repetir a mesma ocorrência", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "dose-logger");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+  const schedule = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5], // sexta-feira — o dia de FIXED_NOW
+  });
+
+  await service.logDoseTaken(context, schedule.id, {
+    occurrenceDate: "2027-01-15",
+    takenAt: FIXED_NOW,
+  });
+  await service.logDoseTaken(context, schedule.id, {
+    occurrenceDate: "2027-01-15",
+    takenAt: FIXED_NOW + 60_000,
+    notes: "Tomado com atraso",
+  });
+
+  const rows = await db
+    .select()
+    .from(medicationDoses)
+    .where(eq(medicationDoses.scheduleId, schedule.id))
+    .all();
+  assert.equal(rows.length, 1, "duas chamadas para a mesma ocorrência devem atualizar, não duplicar");
+  assert.equal(rows[0].takenAt, FIXED_NOW + 60_000);
+  assert.equal(rows[0].notes, "Tomado com atraso");
+});
+
+test("lista as doses de hoje respeitando o dia da semana e refletindo o que já foi tomado", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "today-doses");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const dueToday = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5], // sexta-feira
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "07:00",
+    daysOfWeek: [1], // segunda-feira — não é hoje
+  });
+
+  const beforeTaken = await service.listTodayDoses(context, relative.id);
+  assert.deepEqual(beforeTaken.map((dose) => dose.scheduleId), [dueToday.id]);
+  assert.equal(beforeTaken[0].takenAt, null);
+
+  await service.logDoseTaken(context, dueToday.id, {
+    occurrenceDate: beforeTaken[0].occurrenceDate,
+    takenAt: FIXED_NOW,
+  });
+
+  const afterTaken = await service.listTodayDoses(context, relative.id);
+  assert.equal(afterTaken[0].takenAt, FIXED_NOW);
+});
+
+test("registra e remove a subscription de push do próprio usuário", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  await seedUser(db, "push-user");
+
+  await service.upsertPushSubscription(
+    { userId: "push-user" },
+    { endpoint: "https://push.example/a", p256dh: "p256dh-key", authKey: "auth-key" },
+  );
+  const [row] = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, "push-user"))
+    .all();
+  assert.equal(row.endpoint, "https://push.example/a");
+
+  // Another user can't delete someone else's subscription by endpoint.
+  await seedUser(db, "other-user");
+  await service.deletePushSubscription({ userId: "other-user" }, "https://push.example/a");
+  assert.equal(
+    (await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, "push-user")).all()).length,
+    1,
+  );
+
+  await service.deletePushSubscription({ userId: "push-user" }, "https://push.example/a");
+  assert.deepEqual(await db.select().from(pushSubscriptions).all(), []);
 });
 
 test("isola IDs entre duas famílias e não revela registros cruzados", async () => {
@@ -555,4 +727,128 @@ test("reativa vínculo revogado sem duplicar o membro", async () => {
     .where(eq(familyMembers.userId, "member-caregiver"))
     .all();
   assert.equal(rows.length, 1);
+});
+
+// db/queries/reminders.ts — the "system" query path the Cron Trigger uses,
+// deliberately bypassing FamilyCareDataService/requireFamilyRole.
+
+test("findDueSchedules encontra horários na janela de 5 minutos, no dia da semana certo", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "cron-family");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const dueExact = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5], // sexta — FIXED_NOW
+  });
+  const dueEdgeOfWindow = await service.createSchedule(context, medication.id, {
+    timeOfDay: "04:57", // 3 minutos atrás — dentro da janela de 5 min
+    daysOfWeek: [5],
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "04:50", // 10 minutos atrás — fora da janela
+    daysOfWeek: [5],
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [1], // segunda — dia errado
+  });
+
+  const due = await findDueSchedules(db, FIXED_NOW);
+  assert.deepEqual(
+    due.map((item) => item.scheduleId).sort(),
+    [dueExact.id, dueEdgeOfWindow.id].sort(),
+  );
+});
+
+test("recordNotifiedOccurrence é idempotente: a segunda chamada para a mesma ocorrência não insere de novo", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "cron-idempotent");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+  const schedule = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+  });
+  const params = {
+    familyId: context.familyId,
+    medicationId: medication.id,
+    scheduleId: schedule.id,
+    occurrenceDate: "2027-01-15",
+    scheduledAt: FIXED_NOW,
+    now: FIXED_NOW,
+  };
+
+  assert.equal(await recordNotifiedOccurrence(db, { ...params, id: "notified-1" }), true);
+  assert.equal(await recordNotifiedOccurrence(db, { ...params, id: "notified-2" }), false);
+
+  const rows = await db.select().from(medicationDoses).where(eq(medicationDoses.scheduleId, schedule.id)).all();
+  assert.equal(rows.length, 1);
+});
+
+test("recordNotifiedOccurrence não reivindica a ocorrência se a dose já foi marcada como tomada antes do cron rodar", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "cron-vs-manual");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+  const schedule = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+  });
+
+  await service.logDoseTaken(context, schedule.id, {
+    occurrenceDate: "2027-01-15",
+    takenAt: FIXED_NOW - 1_000,
+  });
+
+  const claimed = await recordNotifiedOccurrence(db, {
+    id: "notified-after-taken",
+    familyId: context.familyId,
+    medicationId: medication.id,
+    scheduleId: schedule.id,
+    occurrenceDate: "2027-01-15",
+    scheduledAt: FIXED_NOW,
+    now: FIXED_NOW,
+  });
+  assert.equal(claimed, false, "não deve reenviar push para uma dose já registrada como tomada");
+});
+
+test("listActivePushSubscriptionsForFamily retorna só assinaturas de membros ativos da família", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context, family } = await createFamilyFor(service, db, "sub-admin");
+  await seedUser(db, "sub-active-member");
+  await seedUser(db, "sub-revoked-member");
+  await service.addMember(context, { userId: "sub-active-member", role: "viewer" });
+  await service.addMember(context, { userId: "sub-revoked-member", role: "viewer" });
+  await service.revokeMember(context, "sub-revoked-member");
+
+  await service.upsertPushSubscription(
+    { userId: "sub-active-member" },
+    { endpoint: "https://push.example/active", p256dh: "k", authKey: "a" },
+  );
+  await service.upsertPushSubscription(
+    { userId: "sub-revoked-member" },
+    { endpoint: "https://push.example/revoked", p256dh: "k", authKey: "a" },
+  );
+
+  const subscriptions = await listActivePushSubscriptionsForFamily(db, family.id);
+  assert.deepEqual(subscriptions.map((item) => item.endpoint), ["https://push.example/active"]);
+});
+
+test("deleteExpiredSubscription remove a assinatura indicada (limpeza pós-410/404)", async () => {
+  const { db } = await createFixedClockTestContext();
+  await seedUser(db, "expiring-user");
+  await db.insert(pushSubscriptions).values({
+    id: "expiring-subscription",
+    userId: "expiring-user",
+    endpoint: "https://push.example/expiring",
+    p256dh: "k",
+    authKey: "a",
+    createdAt: FIXED_NOW,
+    lastSeenAt: FIXED_NOW,
+  });
+
+  await deleteExpiredSubscription(db, "expiring-subscription");
+  assert.deepEqual(await db.select().from(pushSubscriptions).all(), []);
 });

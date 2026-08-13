@@ -99,8 +99,9 @@ button { cursor: pointer; }
 .medication-heading-actions button { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-heading-actions button:hover { background: #cce8e2; }
 .medication-list { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.medication-row { min-height: 68px; padding: 12px 15px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 30px; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
-.medication-row:last-child { border-bottom: 0; }
+.medication-list-item { border-bottom: 1px solid var(--line); }
+.medication-list-item:last-child { border-bottom: 0; }
+.medication-row { min-height: 68px; padding: 12px 15px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 30px; align-items: center; gap: 12px; }
 .pill-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--mint); color: var(--teal); }
 .medication-row strong, .medication-row small { display: block; }
 .medication-row strong, .medication-row small { overflow-wrap: anywhere; }
@@ -118,6 +119,40 @@ button { cursor: pointer; }
   .remove-medication { opacity: .55; }
 }
 .empty-medications { padding: 28px; border: 1px dashed var(--line); border-radius: 14px; color: #526c69; font-size: 13px; text-align: center; }
+
+.medication-schedules { padding: 0 15px 12px; }
+.medication-schedules-toggle { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 4px 0; color: var(--muted); font-size: 11px; font-weight: 750; }
+.medication-schedules-toggle:hover { color: var(--teal-dark); }
+.medication-schedules-panel { margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.medication-schedules-error { margin: 0 0 8px; color: var(--red); font-size: 12px; }
+.medication-schedules-loading, .medication-schedules-empty { margin: 0; color: var(--muted); font-size: 12px; }
+.medication-schedules-list { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.medication-schedules-list li { display: grid; grid-template-columns: 48px 1fr auto 26px; align-items: center; gap: 8px; }
+.medication-schedules-time { font-weight: 800; color: var(--ink); font-size: 12px; }
+.medication-schedules-days { color: var(--muted); font-size: 12px; }
+.medication-schedules-quantity { color: var(--teal-dark); font-size: 12px; font-weight: 750; }
+.medication-schedules-list li button { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #9b6262; }
+.medication-schedules-list li button:hover { background: var(--red-soft); color: var(--red); }
+.medication-schedules-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.medication-schedules-form input[type="time"], .medication-schedules-form input[type="number"] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font-size: 12px; }
+.medication-schedules-form input[type="number"] { width: 56px; }
+.medication-schedules-weekdays { display: inline-flex; gap: 4px; }
+.medication-schedules-weekdays button { border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; }
+.medication-schedules-weekdays button.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
+.medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-schedules-add:hover { background: #cce8e2; }
+
+.today-doses { margin: 0 28px 28px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; }
+.today-doses-error { margin: 0 0 10px; color: var(--red); font-size: 12px; }
+.today-doses-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.today-doses-list li { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.today-doses-list li.taken { opacity: .65; }
+.today-doses-time { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-weight: 800; font-size: 12px; }
+.today-doses-list li strong { display: block; font-size: 13px; }
+.today-doses-list li small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.today-doses-list li button { border: 0; border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-doses-list li button:hover { background: #cce8e2; }
+.today-doses-done { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
 .empty-family-record { min-height: 430px; display: grid; place-items: center; padding: 40px; text-align: center; }
 .empty-family-record > div { max-width: 360px; }
 .empty-family-record > div > span { width: 58px; height: 58px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 18px; background: var(--mint); color: var(--teal); }
@@ -363,6 +398,9 @@ input, select, textarea, .form-actions button) { background: var(--surface-soft)
 .user-menu-identity small { margin-top: 2px; color: var(--muted); font-size: 11px; }
 .user-menu-item { width: 100%; border: 0; border-radius: 8px; padding: 10px; background: transparent; color: var(--ink); font-weight: 750; font-size: 12px; text-align: left; }
 .user-menu-item:hover, .user-menu-item:focus-visible { background: var(--red-soft); color: var(--red); }
+.user-menu-item--toggle:hover, .user-menu-item--toggle:focus-visible { background: var(--mint); color: var(--teal-dark); }
+.user-menu-item--toggle:disabled { opacity: .6; cursor: default; }
+.user-menu-note { color: var(--muted); font-weight: 600; cursor: default; }
 :root[data-theme="dark"] .user-menu-popover { background: var(--surface); }
 :root[data-theme="dark"] .user-menu-button { border-color: var(--line); }
 

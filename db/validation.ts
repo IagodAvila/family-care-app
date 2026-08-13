@@ -1,7 +1,10 @@
 import type {
   MedicationInput,
+  MedicationScheduleInput,
+  PushSubscriptionInput,
   RelativeInput,
   UpdateMedicationInput,
+  UpdateMedicationScheduleInput,
   UpdateRelativeInput,
 } from "./domain.ts";
 import { FamilyCareDataError } from "./errors.ts";
@@ -144,4 +147,63 @@ export function validateEmail(value: string): string {
     throw new FamilyCareDataError("INVALID_INPUT");
   }
   return normalized;
+}
+
+const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+
+function daysOfWeek(values: number[] | undefined): number[] {
+  const normalized = values === undefined ? ALL_WEEKDAYS : values;
+  const unique = [...new Set(normalized)];
+  if (
+    unique.length === 0
+    || unique.length > 7
+    || unique.some((day) => !Number.isSafeInteger(day) || day < 1 || day > 7)
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return unique.sort((a, b) => a - b);
+}
+
+export function validateScheduleInput(
+  input: MedicationScheduleInput | UpdateMedicationScheduleInput,
+) {
+  const timeOfDay = requireText(input.timeOfDay, 5);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(timeOfDay)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  const quantity = input.quantity ?? 1;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  return {
+    timeOfDay,
+    daysOfWeek: daysOfWeek(input.daysOfWeek),
+    quantity,
+    position: position(input.position),
+  };
+}
+
+export function validateOccurrenceDate(value: string): string {
+  const normalized = requireText(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return normalized;
+}
+
+export function validatePushSubscriptionInput(input: PushSubscriptionInput) {
+  const endpoint = requireText(input.endpoint, 600);
+  if (!/^https:\/\//.test(endpoint)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return {
+    endpoint,
+    p256dh: requireText(input.p256dh, 200),
+    authKey: requireText(input.authKey, 200),
+    userAgent: input.userAgent
+      ? optionalText(input.userAgent, 300)
+      : null,
+  };
 }

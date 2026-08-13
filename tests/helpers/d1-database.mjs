@@ -28,9 +28,23 @@ class LocalD1PreparedStatement {
     };
   }
 
+  /**
+   * drizzle-orm's D1 session calls `.raw()` (not `.all()`) whenever a query
+   * has an explicit `fields` selection — e.g. any multi-table join with
+   * `.select({...})` — and maps the result back to those fields *by column
+   * position*, not by name (see `mapResultRow` in drizzle-orm's d1/session).
+   * That matters here because a join can select same-named columns from
+   * different tables (e.g. `medications.id` and `relatives.id` in the same
+   * query): `.all()`'s plain JS objects silently collapse duplicate keys,
+   * so deriving `.raw()` from `.all()` (as this used to) would lose
+   * columns and desync the positional mapping. `setReturnArrays` gets
+   * genuinely positional rows straight from node:sqlite instead, with every
+   * selected column intact regardless of name collisions.
+   */
   async raw() {
-    const { results } = await this.all();
-    return results.map((row) => Object.values(row));
+    const statement = this.database.prepare(this.query);
+    statement.setReturnArrays(true);
+    return statement.all(...this.parameters);
   }
 
   async first(column) {

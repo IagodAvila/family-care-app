@@ -9,3 +9,11 @@ GOOGLE_CLIENT_SECRET=
 # Any long random string — signs the session/OAuth-handshake cookies.
 # Generate one with: openssl rand -base64 32
 SESSION_SECRET=
+
+# Powers Web Push medication reminders (optional — the feature no-ops
+# without these, see lib/auth/env.ts). Generate a keypair with:
+# npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+# A contact address the push services can reach you at if something's wrong.
+VAPID_SUBJECT=mailto:you@example.com

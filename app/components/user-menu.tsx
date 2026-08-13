@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getInitials } from "@/lib/family-format";
 import type { CurrentUser } from "@/hooks/use-family-store";
+import { PushNotificationsToggle } from "./push-notifications-toggle";
 
 type UserMenuProps = {
   user: CurrentUser;
@@ -78,6 +79,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
             <strong>{user.displayName ?? "Minha conta"}</strong>
             <small>{user.emailNormalized}</small>
           </div>
+          <PushNotificationsToggle />
           <button className="user-menu-item" ref={logoutRef} type="button" role="menuitem" onClick={logout}>
             Sair
           </button>

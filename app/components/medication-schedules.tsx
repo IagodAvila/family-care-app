@@ -1,0 +1,197 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Clock, Plus, X } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
+import type { MedicationSchedule } from "@/types/family";
+
+const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+const ICON_STROKE = 1.75;
+
+type DraftSchedule = { timeOfDay: string; daysOfWeek: number[]; quantity: number };
+
+const EMPTY_DRAFT: DraftSchedule = { timeOfDay: "08:00", daysOfWeek: ALL_WEEKDAYS, quantity: 1 };
+
+type MedicationSchedulesProps = {
+  familyId: string;
+  relativeId: string;
+  medicationId: string;
+  medicationName: string;
+  readOnly: boolean;
+};
+
+/**
+ * Collapsible "Horários" panel for a single (already persisted) medication.
+ * Schedules can only be attached to a real `medicationId` (the DB FK
+ * requires one), so this lives on the read/detail side rather than the
+ * relative-form's in-memory medication drafts, which don't have a server id
+ * until the relative itself is saved.
+ */
+export function MedicationSchedules({
+  familyId,
+  relativeId,
+  medicationId,
+  medicationName,
+  readOnly,
+}: MedicationSchedulesProps) {
+  const [open, setOpen] = useState(false);
+  const [schedules, setSchedules] = useState<MedicationSchedule[] | null>(null);
+  const [draft, setDraft] = useState<DraftSchedule>(EMPTY_DRAFT);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const basePath = `/api/families/${familyId}/relatives/${relativeId}/medications/${medicationId}/schedules`;
+
+  useEffect(() => {
+    if (!open || schedules !== null) return;
+    let cancelled = false;
+    api(basePath)
+      .then((data) => {
+        if (!cancelled) setSchedules(data.schedules);
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : "Não foi possível carregar os horários.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, schedules, basePath]);
+
+  function toggleDay(day: number) {
+    setDraft((current) => ({
+      ...current,
+      daysOfWeek: current.daysOfWeek.includes(day)
+        ? current.daysOfWeek.filter((item) => item !== day)
+        : [...current.daysOfWeek, day].sort((a, b) => a - b),
+    }));
+  }
+
+  async function addSchedule(event: React.FormEvent) {
+    event.preventDefault();
+    if (draft.daysOfWeek.length === 0) {
+      setError("Selecione ao menos um dia da semana.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await api(basePath, { method: "POST", body: JSON.stringify(draft) });
+      setSchedules((current) => [...(current ?? []), created.schedule]);
+      setDraft(EMPTY_DRAFT);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível salvar o horário.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSchedule(schedule: MedicationSchedule) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`${basePath}/${schedule.id}?expectedVersion=${schedule.version}`, { method: "DELETE" });
+      setSchedules((current) => (current ?? []).filter((item) => item.id !== schedule.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível remover o horário.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="medication-schedules">
+      <button
+        type="button"
+        className="medication-schedules-toggle"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+        Horários
+        {open ? (
+          <ChevronUp aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+        ) : (
+          <ChevronDown aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+        )}
+      </button>
+
+      {open && (
+        <div className="medication-schedules-panel">
+          {error && <p className="medication-schedules-error">{error}</p>}
+
+          {schedules === null ? (
+            <p className="medication-schedules-loading">Carregando horários…</p>
+          ) : schedules.length === 0 ? (
+            <p className="medication-schedules-empty">Nenhum horário cadastrado.</p>
+          ) : (
+            <ul className="medication-schedules-list">
+              {schedules.map((schedule) => (
+                <li key={schedule.id}>
+                  <span className="medication-schedules-time">{formatTime(schedule.timeOfDay)}</span>
+                  <span className="medication-schedules-days">
+                    {schedule.daysOfWeek.length === 7
+                      ? "Todos os dias"
+                      : schedule.daysOfWeek.map((day) => WEEKDAY_LABELS[day]).join(", ")}
+                  </span>
+                  <span className="medication-schedules-quantity">{schedule.quantity}x</span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      aria-label={`Remover horário das ${formatTime(schedule.timeOfDay)}`}
+                      disabled={busy}
+                      onClick={() => removeSchedule(schedule)}
+                    >
+                      <X aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!readOnly && (
+            <form className="medication-schedules-form" onSubmit={addSchedule}>
+              <input
+                type="time"
+                value={draft.timeOfDay}
+                onChange={(event) => setDraft((current) => ({ ...current, timeOfDay: event.target.value }))}
+                aria-label={`Horário para ${medicationName}`}
+                required
+              />
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={draft.quantity}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, quantity: Number(event.target.value) || 1 }))
+                }
+                aria-label={`Quantidade para ${medicationName}`}
+              />
+              <div className="medication-schedules-weekdays" role="group" aria-label="Dias da semana">
+                {ALL_WEEKDAYS.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className={draft.daysOfWeek.includes(day) ? "active" : undefined}
+                    onClick={() => toggleDay(day)}
+                    aria-pressed={draft.daysOfWeek.includes(day)}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </button>
+                ))}
+              </div>
+              <button type="submit" className="medication-schedules-add" disabled={busy}>
+                <Plus aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+                Adicionar horário
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -11,6 +11,27 @@ export type Medication = {
   schedule?: string;
 };
 
+export type MedicationSchedule = {
+  id: string;
+  version: number;
+  timeOfDay: string;
+  daysOfWeek: number[];
+  quantity: number;
+};
+
+/** One schedule occurrence due today, paired with its dose if already logged — see `FamilyCareDataService.listTodayDoses`. */
+export type DueDose = {
+  scheduleId: string;
+  medicationId: string;
+  medicationName: string;
+  dosage: string;
+  timeOfDay: string;
+  quantity: number;
+  occurrenceDate: string;
+  scheduledAt: number;
+  takenAt: number | null;
+};
+
 export type Relative = {
   id: string;
   /** Absent for a relative not yet persisted; required to update/delete it (optimistic concurrency). */

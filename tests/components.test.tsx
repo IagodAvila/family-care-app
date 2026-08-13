@@ -377,6 +377,53 @@ describe("fluxos críticos do FamilyCare", () => {
     });
   });
 
+  test("cadastra um horário para um medicamento e remove em seguida", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    await user.click(await screen.findByRole("button", { name: "Horários" }));
+    await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
+
+    expect(await screen.findByText("08:00")).toBeTruthy();
+    expect(screen.getByText("Todos os dias")).toBeTruthy();
+    expect(screen.getByText("1x")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Remover horário das 08:00" }));
+    expect(await screen.findByText("Nenhum horário cadastrado.")).toBeTruthy();
+  });
+
+  test("marca uma dose de hoje como tomada", async () => {
+    const relative = storedRelative({
+      medications: [{ name: "Enalapril", dosage: "20 mg" }],
+    });
+    const backend = createFakeFamilyBackend([relative]);
+    // Seeds a dose schedule directly on the fake's stored medication object
+    // (mutating it in place, same object `getRelatives()` returns) — the
+    // "Hoje" section only shows occurrences from an existing schedule,
+    // and creating one through the UI first would be redundant with the
+    // "cadastra um horário" test above.
+    backend.getRelatives()[0].medications[0].doseSchedules.push({
+      id: "schedule-seed-1",
+      version: 1,
+      timeOfDay: "08:00",
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      quantity: 1,
+    });
+    vi.stubGlobal("fetch", backend.fetch);
+    render(<Home />);
+    await screen.findByLabelText("Navegação principal");
+    const user = userEvent.setup();
+
+    expect(await screen.findByText("Hoje")).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Marcar como tomado" }));
+
+    expect(await screen.findByText("Tomado")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Marcar como tomado" })).toBeNull();
+  });
+
   test("edita familiar e substitui a lista de medicamentos existente", async () => {
     const backend = await renderApp([storedRelative({
       medications: [{ name: "Losartana", dosage: "50 mg", orientation: "Pela manhã" }],

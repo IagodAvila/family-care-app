@@ -13,6 +13,13 @@ export type AppEnv = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
+  // Powers Web Push medication reminders. Optional like `AI` below it in
+  // `worker/index.ts`'s `Env` — the feature quietly no-ops (no subscribe
+  // button, no push sent) when these are absent instead of the whole app
+  // failing to boot. Generate with `npx web-push generate-vapid-keys`.
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 };
 
 const REQUIRED_KEYS: (keyof AppEnv)[] = [

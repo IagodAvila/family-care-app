@@ -17,6 +17,7 @@
     "deploy": "vinext build && wrangler deploy"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "^1.0.2",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.29.0",
     "next": "16.2.6",

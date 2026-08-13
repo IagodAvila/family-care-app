@@ -168,6 +168,7 @@ export default function Home() {
           <MedicalRecord
             emergencyMode={emergencyMode}
             family={family}
+            familyId={familyId}
             selected={selected}
             onAddMedication={() => setShowMedicationForm(true)}
             onDeleteRelative={requestDeleteRelative}
