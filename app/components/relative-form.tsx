@@ -10,10 +10,17 @@ import {
   updateMedicationInList,
   validateBirthDate,
 } from "@/lib/family-data";
+import { api } from "@/lib/api-client";
 import { isNoDataValue, NO_DATA_LABEL } from "@/lib/family-format";
 import { MAX_PHOTO_FILE_SIZE, resizePhotoToDataUrl } from "@/lib/photo";
 import type { Medication, Relative } from "@/types/family";
 import { PersonAvatar } from "./person-avatar";
+
+type AssistResult = {
+  conditions: string[];
+  allergies: string[];
+  medications: { name: string; dosage: string; orientation: string }[];
+};
 
 type RelativeFormProps = {
   relative?: Relative;
@@ -102,6 +109,21 @@ export function RelativeForm({
   const [processingPhoto, setProcessingPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // AI-assisted fill-in: free text -> structured suggestions for
+  // comorbidities/alergias/medicamentos. `conditionsSeed`/`allergiesSeed`
+  // feed YesNoField's `initialValues` — that component only reads the prop
+  // on mount, so `assistVersion` forces a remount to pick up a new seed
+  // (see YesNoField's docstring). A field is only overwritten when the
+  // suggestion actually says something about it — an empty result leaves
+  // whatever the person already typed alone.
+  const [assistText, setAssistText] = useState("");
+  const [assisting, setAssisting] = useState(false);
+  const [assistError, setAssistError] = useState("");
+  const [assistNote, setAssistNote] = useState("");
+  const [conditionsSeed, setConditionsSeed] = useState(relative?.conditions ?? []);
+  const [allergiesSeed, setAllergiesSeed] = useState(relative?.allergies ?? []);
+  const [assistVersion, setAssistVersion] = useState(0);
+
   async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -124,6 +146,50 @@ export function RelativeForm({
       setPhotoError("Não foi possível processar essa imagem. Tente outro arquivo.");
     } finally {
       setProcessingPhoto(false);
+    }
+  }
+
+  async function runAssist() {
+    if (!assistText.trim() || assisting) return;
+    setAssisting(true);
+    setAssistError("");
+    setAssistNote("");
+    try {
+      const result: AssistResult = await api("/api/assist/relative-fields", {
+        method: "POST",
+        body: JSON.stringify({ text: assistText }),
+      });
+
+      const appliedTo: string[] = [];
+      if (result.conditions.length > 0) {
+        setConditionsSeed(result.conditions);
+        appliedTo.push("comorbidades");
+      }
+      if (result.allergies.length > 0) {
+        setAllergiesSeed(result.allergies);
+        appliedTo.push("alergias");
+      }
+      if (result.medications.length > 0) {
+        setMedications((current) =>
+          result.medications.reduce(
+            (list, medication) => addMedicationToList(list, medication),
+            current,
+          ),
+        );
+        appliedTo.push("medicamentos");
+      }
+      setAssistVersion((current) => current + 1);
+      setAssistNote(
+        appliedTo.length > 0
+          ? `Sugestões aplicadas em ${appliedTo.join(", ")} — revise antes de salvar.`
+          : "Não encontrei nada específico nesse texto para preencher.",
+      );
+    } catch (caught) {
+      setAssistError(
+        caught instanceof Error ? caught.message : "Não foi possível gerar sugestões agora.",
+      );
+    } finally {
+      setAssisting(false);
     }
   }
 
@@ -206,6 +272,31 @@ export function RelativeForm({
         </div>
       </div>
 
+      <div className="ai-assist">
+        <label>
+          <span className="field-label-text">Preenchimento assistido (opcional)</span>
+          <textarea
+            value={assistText}
+            onChange={(event) => setAssistText(event.target.value)}
+            placeholder="Ex.: Ela tem pressão alta, toma losartana 50mg à noite, e é alérgica a dipirona."
+          />
+        </label>
+        <div className="ai-assist-actions">
+          <button type="button" onClick={runAssist} disabled={assisting || !assistText.trim()}>
+            {assisting ? "Analisando…" : "Sugerir preenchimento com IA"}
+          </button>
+          <span className="ai-assist-hint">
+            Preenche comorbidades, alergias e medicamentos abaixo — revise antes de salvar.
+          </span>
+        </div>
+        {assistError && (
+          <p className="field-error" role="alert">{assistError}</p>
+        )}
+        {assistNote && (
+          <p className="ai-assist-note" role="status">{assistNote}</p>
+        )}
+      </div>
+
       <p className="required-legend">* Campos obrigatórios</p>
 
       <div className="form-grid">
@@ -259,16 +350,18 @@ export function RelativeForm({
           </select>
         </label>
         <YesNoField
+          key={`conditions-${assistVersion}`}
           label="Comorbidades, separadas por vírgula"
           name="conditions"
           placeholder="Hipertensão, diabetes"
-          initialValues={relative?.conditions ?? []}
+          initialValues={conditionsSeed}
         />
         <YesNoField
+          key={`allergies-${assistVersion}`}
           label="Alergias, separadas por vírgula"
           name="allergies"
           placeholder="Dipirona, amoxicilina"
-          initialValues={relative?.allergies ?? []}
+          initialValues={allergiesSeed}
         />
       </div>
 

@@ -31,6 +31,10 @@ const localBindingConfig = {
         },
       ]
     : [],
+  // remote: true — Workers AI has no local emulation; without this the
+  // Cloudflare Vite plugin reports the binding as "not supported" and
+  // env.AI is unusable in `pnpm dev`.
+  ai: { binding: "AI", remote: true },
 };
 
 export default defineConfig(async () => {

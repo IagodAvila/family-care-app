@@ -227,6 +227,44 @@ describe("fluxos críticos do FamilyCare", () => {
     await waitFor(() => expect(backend.getRelatives()).toHaveLength(1));
   });
 
+  test("preenchimento assistido aplica comorbidades, alergias e medicamentos sugeridos", async () => {
+    const user = userEvent.setup();
+    const backend = await renderApp([]);
+    const dialog = await openRelativeForm(user);
+
+    const realFetch = backend.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/assist/relative-fields")) {
+        return new Response(
+          JSON.stringify({
+            conditions: ["Hipertensão"],
+            allergies: ["Não possui"],
+            medications: [{ name: "Losartana", dosage: "50mg", orientation: "à noite" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return realFetch(input, init);
+    });
+
+    const textarea = within(dialog).getByPlaceholderText(/pressão alta/);
+    await user.type(textarea, "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias.");
+    await user.click(within(dialog).getByRole("button", { name: "Sugerir preenchimento com IA" }));
+
+    expect(await within(dialog).findByText(/Sugestões aplicadas/)).toBeTruthy();
+    expect(within(dialog).getByText("Losartana")).toBeTruthy();
+
+    const conditionsInput = within(dialog).getByLabelText("Comorbidades, separadas por vírgula") as HTMLInputElement;
+    expect(conditionsInput.value).toBe("Hipertensão");
+
+    // Allergies came back as the "none" sentinel — that toggle switches to
+    // "Não possui" mode, which has no visible text input to read a value
+    // from; the "Não possui" button itself becomes the active one.
+    const allergiesToggle = within(dialog).getByRole("group", { name: /Status: Alergias/ });
+    expect(within(allergiesToggle).getByRole("button", { name: "Não possui" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   test("oferece importar dados salvos de uma versão anterior, troca familiar e ativa o modo emergência", async () => {
     const legacyFamily = [
       storedRelative({
