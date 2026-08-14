@@ -252,7 +252,14 @@ describe("fluxos críticos do FamilyCare", () => {
     await user.type(textarea, "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias.");
     await user.click(within(dialog).getByRole("button", { name: "Sugerir preenchimento com IA" }));
 
-    expect(await within(dialog).findByText(/Sugestões aplicadas/)).toBeTruthy();
+    // Targets the `role="status"` live region directly instead of
+    // `findByText(/regex/)` — the exact "Sugestões aplicadas em ..." string
+    // includes the AI's own field list (`appliedTo.join(", ")`), so a
+    // regex anchored to just the prefix intermittently failed to match the
+    // full element depending on how the text happened to be queried. The
+    // note is the only `role="status"` region in this form either way.
+    const assistNote = await within(dialog).findByRole("status");
+    expect(assistNote.textContent).toMatch(/Sugestões aplicadas/);
     expect(within(dialog).getByText("Losartana")).toBeTruthy();
 
     const conditionsInput = within(dialog).getByLabelText("Comorbidades, separadas por vírgula") as HTMLInputElement;
