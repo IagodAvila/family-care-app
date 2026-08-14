@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, Clock, Plus, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, Plus, Repeat, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { addDaysToDate } from "@/lib/family-data";
 import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
@@ -18,6 +18,8 @@ type DraftSchedule = {
   treatmentEnabled: boolean;
   startDate: string;
   durationDays: number;
+  intervalEnabled: boolean;
+  intervalHours: number;
 };
 
 function todayIsoDate(): string {
@@ -32,7 +34,33 @@ function createEmptyDraft(): DraftSchedule {
     treatmentEnabled: false,
     startDate: todayIsoDate(),
     durationDays: 10,
+    intervalEnabled: false,
+    intervalHours: 8,
   };
+}
+
+/**
+ * "A cada X horas a partir de HH:MM" (how prescriptions are usually
+ * phrased) -> the individual clock times that covers, e.g. 8h from 08:00
+ * -> ["08:00", "16:00", "00:00"]. Stops once a full day is covered rather
+ * than asking the user how many times/day — 24 doesn't always divide
+ * evenly (e.g. every 5h from 08:00 -> 08:00/13:00/18:00/23:00, 4 times,
+ * not 4.8), so this always takes as many whole intervals as fit in 24h.
+ */
+function computeIntervalTimes(startTime: string, intervalHours: number): string[] {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const startTotalMinutes = startHour * 60 + startMinute;
+  const intervalMinutes = intervalHours * 60;
+  const occurrences = Math.max(1, Math.floor((24 * 60) / intervalMinutes));
+
+  const times: string[] = [];
+  for (let index = 0; index < occurrences; index++) {
+    const totalMinutes = (startTotalMinutes + index * intervalMinutes) % (24 * 60);
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+  }
+  return times;
 }
 
 type MedicationSchedulesProps = {
@@ -111,19 +139,36 @@ export function MedicationSchedules({
       setError("Informe uma duração válida, em dias.");
       return;
     }
+    if (draft.intervalEnabled && (!Number.isSafeInteger(draft.intervalHours) || draft.intervalHours < 1 || draft.intervalHours > 24)) {
+      setError("Informe de quantas em quantas horas, entre 1 e 24.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const payload = {
-        timeOfDay: draft.timeOfDay,
-        daysOfWeek: draft.daysOfWeek,
-        quantity: draft.quantity,
-        ...(draft.treatmentEnabled
-          ? { startDate: draft.startDate, durationDays: draft.durationDays }
-          : {}),
-      };
-      const created = await api(basePath, { method: "POST", body: JSON.stringify(payload) });
-      setSchedules((current) => [...(current ?? []), created.schedule]);
+      // "De 8 em 8 horas" isn't one schedule row — it's every clock time
+      // that interval covers in a day, each created the same way a single
+      // manually-typed horário would be (same days/quantity/treatment
+      // window on all of them).
+      const times = draft.intervalEnabled
+        ? computeIntervalTimes(draft.timeOfDay, draft.intervalHours)
+        : [draft.timeOfDay];
+
+      const createdSchedules: MedicationSchedule[] = [];
+      for (const timeOfDay of times) {
+        const payload = {
+          timeOfDay,
+          daysOfWeek: draft.daysOfWeek,
+          quantity: draft.quantity,
+          ...(draft.treatmentEnabled
+            ? { startDate: draft.startDate, durationDays: draft.durationDays }
+            : {}),
+        };
+        const created = await api(basePath, { method: "POST", body: JSON.stringify(payload) });
+        createdSchedules.push(created.schedule);
+      }
+
+      setSchedules((current) => [...(current ?? []), ...createdSchedules]);
       setDraft(createEmptyDraft());
       // Lets the "Hoje" section (a sibling component, not a parent/child of
       // this one) pick up the new schedule right away instead of waiting
@@ -209,7 +254,9 @@ export function MedicationSchedules({
                         </small>
                       )}
                     </span>
-                    <span className="medication-schedules-quantity">{schedule.quantity}x</span>
+                    <span className="medication-schedules-quantity" title="Quantidade por dose, neste horário">
+                      {schedule.quantity}x
+                    </span>
                     {!readOnly && (
                       <button
                         type="button"
@@ -228,31 +275,37 @@ export function MedicationSchedules({
 
           {!readOnly && (
             <form className="medication-schedules-form" onSubmit={addSchedule}>
-              <input
-                type="time"
-                value={draft.timeOfDay}
-                onChange={(event) => setDraft((current) => ({ ...current, timeOfDay: event.target.value }))}
-                aria-label={`Horário para ${medicationName}`}
-                required
-              />
-              <input
-                type="number"
-                min={1}
-                max={100}
-                // Deliberately not `Number(value) || 1`: that fallback fires
-                // on every keystroke, including the momentarily-empty value
-                // while clearing the field to type a new number, which
-                // fights the user by snapping back to 1 before they can
-                // finish typing. `valueAsNumber` is NaN for "" or invalid
-                // input — a controlled number input renders NaN as empty,
-                // so the field can be cleared normally; validity is
-                // enforced on submit instead (see `addSchedule`).
-                value={Number.isNaN(draft.quantity) ? "" : draft.quantity}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, quantity: event.target.valueAsNumber }))
-                }
-                aria-label={`Quantidade para ${medicationName}`}
-              />
+              <label>
+                {draft.intervalEnabled ? "Primeiro horário" : "Horário"}
+                <input
+                  type="time"
+                  value={draft.timeOfDay}
+                  onChange={(event) => setDraft((current) => ({ ...current, timeOfDay: event.target.value }))}
+                  aria-label={`Horário para ${medicationName}`}
+                  required
+                />
+              </label>
+              <label>
+                Comprimidos por dose
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  // Deliberately not `Number(value) || 1`: that fallback fires
+                  // on every keystroke, including the momentarily-empty value
+                  // while clearing the field to type a new number, which
+                  // fights the user by snapping back to 1 before they can
+                  // finish typing. `valueAsNumber` is NaN for "" or invalid
+                  // input — a controlled number input renders NaN as empty,
+                  // so the field can be cleared normally; validity is
+                  // enforced on submit instead (see `addSchedule`).
+                  value={Number.isNaN(draft.quantity) ? "" : draft.quantity}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, quantity: event.target.valueAsNumber }))
+                  }
+                  aria-label={`Quantidade para ${medicationName}`}
+                />
+              </label>
               <div className="medication-schedules-weekdays" role="group" aria-label="Dias da semana">
                 {ALL_WEEKDAYS.map((day) => (
                   <button
@@ -266,6 +319,48 @@ export function MedicationSchedules({
                   </button>
                 ))}
               </div>
+
+              {draft.intervalEnabled ? (
+                <div className="medication-schedules-treatment">
+                  <label>
+                    A cada quantas horas
+                    <span className="medication-schedules-treatment-days">
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={Number.isNaN(draft.intervalHours) ? "" : draft.intervalHours}
+                        onChange={(event) =>
+                          setDraft((current) => ({ ...current, intervalHours: event.target.valueAsNumber }))
+                        }
+                        aria-label="De quantas em quantas horas tomar"
+                      />
+                      horas
+                    </span>
+                  </label>
+                  {draft.timeOfDay && Number.isSafeInteger(draft.intervalHours) && draft.intervalHours > 0 && draft.intervalHours <= 24 && (
+                    <span className="medication-schedules-treatment-end">
+                      Horários: {computeIntervalTimes(draft.timeOfDay, draft.intervalHours).map(formatTime).join(", ")}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="medication-schedules-treatment-remove"
+                    onClick={() => setDraft((current) => ({ ...current, intervalEnabled: false }))}
+                  >
+                    Remover repetição
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="medication-schedules-treatment-link"
+                  onClick={() => setDraft((current) => ({ ...current, intervalEnabled: true }))}
+                >
+                  <Repeat aria-hidden="true" size={12} strokeWidth={ICON_STROKE} />
+                  Repetir a cada X horas
+                </button>
+              )}
 
               {draft.treatmentEnabled ? (
                 <div className="medication-schedules-treatment">

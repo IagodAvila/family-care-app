@@ -434,6 +434,27 @@ describe("fluxos críticos do FamilyCare", () => {
     expect(await screen.findByRole("button", { name: "Marcar como tomado" })).toBeTruthy();
   });
 
+  test("repete o horário a cada X horas, gerando vários horários de uma vez", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Amoxicilina", dosage: "500 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Amoxicilina");
+    const medicationItem = screen.getByText("Amoxicilina").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(within(medicationItem).getByRole("button", { name: "Repetir a cada X horas" }));
+
+    // Padrão: início 08:00, a cada 8 horas -> 08:00, 16:00, 00:00.
+    expect(within(medicationItem).getByText("Horários: 08:00, 16:00, 00:00")).toBeTruthy();
+
+    await user.click(within(medicationItem).getByRole("button", { name: "Adicionar horário" }));
+
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("16:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("00:00")).toBeTruthy();
+  });
+
   test("cadastra um tratamento com duração definida e mostra a data de término calculada", async () => {
     await renderApp([storedRelative({
       medications: [{ name: "Amoxicilina", dosage: "500 mg" }],
