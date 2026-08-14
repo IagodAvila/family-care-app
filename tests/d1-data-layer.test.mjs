@@ -432,6 +432,42 @@ test("registra dose tomada sem duplicar ao repetir a mesma ocorrência", async (
   assert.equal(rows[0].notes, "Tomado com atraso");
 });
 
+test("reverte uma dose marcada por engano sem apagar o registro da ocorrência", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "dose-undo");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+  const schedule = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+  });
+
+  await service.logDoseTaken(context, schedule.id, {
+    occurrenceDate: "2027-01-15",
+    takenAt: FIXED_NOW,
+    notes: "Marcado sem querer",
+  });
+
+  const reverted = await service.undoDoseTaken(context, schedule.id, "2027-01-15");
+  assert.equal(reverted.takenAt, null);
+  assert.equal(reverted.takenByUserId, null);
+  assert.equal(reverted.notes, null);
+
+  // A linha continua existindo — só a marcação de "tomado" foi limpa — pra
+  // não deixar o cron reivindicar a ocorrência de novo e mandar um push.
+  const rows = await db
+    .select()
+    .from(medicationDoses)
+    .where(eq(medicationDoses.scheduleId, schedule.id))
+    .all();
+  assert.equal(rows.length, 1);
+
+  await expectDataError(
+    service.undoDoseTaken(context, schedule.id, "2027-02-01"),
+    "CONFLICT",
+  );
+});
+
 test("lista as doses de hoje respeitando o dia da semana e refletindo o que já foi tomado", async () => {
   const { db, service } = await createFixedClockTestContext();
   const { context } = await createFamilyFor(service, db, "today-doses");

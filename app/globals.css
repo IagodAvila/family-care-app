@@ -121,16 +121,13 @@ button { cursor: pointer; }
 .empty-medications { padding: 28px; border: 1px dashed var(--line); border-radius: 14px; color: #526c69; font-size: 13px; text-align: center; }
 
 .medication-schedules { padding: 0 15px 12px; }
-.medication-schedules-toggle-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
-.medication-schedules-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 750; }
-/* A plain accordion arrow, not a switch — a switch reads as "on/off",
-   which would wrongly suggest the schedules are only active while this is
-   toggled. Small icon-only button, not the row-wide button this used to
-   be either. */
-.medication-schedules-expand { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); }
-.medication-schedules-expand:hover { background: var(--mint); color: var(--teal-dark); }
-.medication-schedules-expand svg { transition: transform .15s ease; }
-.medication-schedules-expand[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* Same outlined-button language as .edit-button (teal/green outline,
+   white fill) — a real clickable button, not a bare label + separate
+   arrow/switch. The chevron inside rotates with `aria-expanded`. */
+.medication-schedules-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #b8d9d4; border-radius: 999px; padding: 6px 12px; background: var(--surface); color: var(--teal-dark); font-size: 11px; font-weight: 750; }
+.medication-schedules-toggle:hover { background: var(--mint); }
+.medication-schedules-toggle svg:last-child { transition: transform .15s ease; }
+.medication-schedules-toggle[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
 /* Visible with the panel collapsed too — the times/deadline at a glance. */
 .medication-schedules-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
 .medication-schedules-summary li { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; background: var(--mint); color: var(--teal-dark); font-size: 11px; font-weight: 800; }
@@ -156,10 +153,11 @@ button { cursor: pointer; }
 .medication-schedules-weekdays button.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
 .medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-schedules-add:hover { background: #cce8e2; }
-/* A small text link, not a button/chip filling the row — this is a minor,
-   optional add-on to a schedule, not a primary action. */
-.medication-schedules-treatment-link { flex-basis: 100%; display: inline-flex; align-items: center; gap: 5px; width: fit-content; border: 0; background: transparent; padding: 2px 0; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
-.medication-schedules-treatment-link:hover { color: var(--teal-dark); text-decoration-color: currentColor; }
+/* Same clickable-pill language as .medication-schedules-add ("Adicionar
+   horário"), not a full-row chip — this is an optional add-on, but still
+   a real, obviously-clickable button. */
+.medication-schedules-treatment-link { flex-basis: 100%; width: fit-content; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-schedules-treatment-link:hover { background: #cce8e2; }
 .medication-schedules-treatment { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-top: 2px; padding: 12px; border: 1px dashed #b8d9d4; border-radius: 10px; background: var(--mint); }
 .medication-schedules-treatment label { display: grid; gap: 5px; color: var(--teal-dark); font-size: 11px; font-weight: 750; }
 .medication-schedules-form input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font-size: 12px; accent-color: var(--teal); }
@@ -181,9 +179,12 @@ button { cursor: pointer; }
 .today-doses-time { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-weight: 800; font-size: 12px; }
 .today-doses-list li strong { display: block; font-size: 13px; }
 .today-doses-list li small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
-.today-doses-list li button { border: 0; border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
-.today-doses-list li button:hover { background: #cce8e2; }
+.today-doses-mark { border: 0; border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-doses-mark:hover { background: #cce8e2; }
+.today-doses-done-group { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .today-doses-done { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-doses-undo { border: 0; background: transparent; padding: 0; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; white-space: nowrap; }
+.today-doses-undo:hover { color: var(--red); text-decoration-color: currentColor; }
 .empty-family-record { min-height: 430px; display: grid; place-items: center; padding: 40px; text-align: center; }
 .empty-family-record > div { max-width: 360px; }
 .empty-family-record > div > span { width: 58px; height: 58px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 18px; background: var(--mint); color: var(--teal); }

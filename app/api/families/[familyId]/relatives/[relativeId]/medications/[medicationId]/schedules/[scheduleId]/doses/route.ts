@@ -27,3 +27,18 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ dose }, { status: 201 });
   });
 }
+
+/** Reverts a dose mistakenly marked as taken (`?occurrenceDate=YYYY-MM-DD`). */
+export async function DELETE(request: Request, context: RouteContext) {
+  return withApi(async () => {
+    const session = await requireSessionUser(request);
+    const { familyId, scheduleId } = await context.params;
+    const occurrenceDate = new URL(request.url).searchParams.get("occurrenceDate") ?? "";
+    const dose = await (await getService()).undoDoseTaken(
+      { userId: session.userId, familyId },
+      scheduleId,
+      occurrenceDate,
+    );
+    return Response.json({ dose });
+  });
+}

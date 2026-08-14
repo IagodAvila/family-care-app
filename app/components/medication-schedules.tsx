@@ -148,24 +148,16 @@ export function MedicationSchedules({
 
   return (
     <div className="medication-schedules">
-      <div className="medication-schedules-toggle-row">
-        {/* Plain label, not a button — only the arrow expands the panel below.
-            A switch would wrongly imply "the schedules are only active while
-            this is on"; an accordion arrow doesn't carry that on/off meaning. */}
-        <span className="medication-schedules-label">
-          <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
-          Horários
-        </span>
-        <button
-          type="button"
-          className="medication-schedules-expand"
-          aria-expanded={open}
-          aria-label={open ? "Ocultar horários" : "Mostrar horários"}
-          onClick={() => setOpen((current) => !current)}
-        >
-          <ChevronDown aria-hidden="true" size={15} strokeWidth={ICON_STROKE} />
-        </button>
-      </div>
+      <button
+        type="button"
+        className="medication-schedules-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+        Horários
+        <ChevronDown aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+      </button>
 
       {!open && schedules && schedules.length > 0 && (
         <ul className="medication-schedules-summary">

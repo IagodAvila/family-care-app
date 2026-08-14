@@ -1205,6 +1205,40 @@ export class FamilyCareDataService {
   }
 
   /**
+   * Reverts a dose mistakenly marked as taken. Clears `takenAt` (and who/
+   * notes) but leaves the `(scheduleId, occurrenceDate)` row itself in
+   * place — deleting it outright would let the cron re-claim the slot and
+   * send a duplicate reminder for an occurrence it already notified about.
+   */
+  async undoDoseTaken(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+    occurrenceDateInput: string,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      await this.requireSchedule(context, scheduleId);
+      const occurrenceDate = validateOccurrenceDate(occurrenceDateInput);
+      const now = this.now();
+
+      const [result] = await this.db.batch([
+        this.db
+          .update(medicationDoses)
+          .set({ takenAt: null, takenByUserId: null, notes: null, updatedAt: now })
+          .where(
+            and(
+              eq(medicationDoses.scheduleId, scheduleId),
+              eq(medicationDoses.occurrenceDate, occurrenceDate),
+            ),
+          ),
+      ]);
+
+      this.requireChange(result);
+      return this.requireDose(scheduleId, occurrenceDate);
+    });
+  }
+
+  /**
    * Today's schedule occurrences for a relative (in `APP_TIMEZONE`), each
    * paired with its dose row if one already exists — the shape the "due
    * today" / "mark as taken" UI needs. Not a full dose history browser;

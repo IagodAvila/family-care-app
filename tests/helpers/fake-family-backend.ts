@@ -377,6 +377,13 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
       takenDoses.set(doseKey(found.schedule.id, occurrenceDate), takenAt);
       return jsonResponse({ dose: { scheduleId: found.schedule.id, occurrenceDate, takenAt } }, 201);
     }
+    if (doseMatch && method === "DELETE") {
+      const found = findDoseSchedule(doseMatch[1]);
+      if (!found) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      const occurrenceDate = url.searchParams.get("occurrenceDate") ?? todayOccurrenceDate();
+      takenDoses.delete(doseKey(found.schedule.id, occurrenceDate));
+      return jsonResponse({ dose: { scheduleId: found.schedule.id, occurrenceDate, takenAt: null } });
+    }
 
     const todayDosesMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/relatives/([^/]+)/doses$`));
     if (todayDosesMatch && method === "GET") {

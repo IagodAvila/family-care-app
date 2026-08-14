@@ -70,6 +70,25 @@ export function TodayDoses({ familyId, relativeId }: TodayDosesProps) {
     }
   }
 
+  /** Undoes a dose marked by mistake — clears `takenAt` without touching the notification record (see `undoDoseTaken`). */
+  async function undoTaken(dose: DueDose) {
+    setPendingScheduleId(dose.scheduleId);
+    setError(null);
+    try {
+      await api(
+        `/api/families/${familyId}/relatives/${relativeId}/medications/${dose.medicationId}/schedules/${dose.scheduleId}/doses?occurrenceDate=${dose.occurrenceDate}`,
+        { method: "DELETE" },
+      );
+      setDoses((current) =>
+        (current ?? []).map((item) => (item.scheduleId === dose.scheduleId ? { ...item, takenAt: null } : item)),
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível desfazer a marcação.");
+    } finally {
+      setPendingScheduleId(null);
+    }
+  }
+
   if (!error && (doses === null || doses.length === 0)) {
     return null;
   }
@@ -93,13 +112,24 @@ export function TodayDoses({ familyId, relativeId }: TodayDosesProps) {
                 <small>{dose.dosage ? `${dose.dosage} · ${dose.quantity}x` : `${dose.quantity}x`}</small>
               </div>
               {dose.takenAt ? (
-                <span className="today-doses-done">
-                  <Check aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
-                  Tomado
-                </span>
+                <div className="today-doses-done-group">
+                  <span className="today-doses-done">
+                    <Check aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+                    Tomado
+                  </span>
+                  <button
+                    type="button"
+                    className="today-doses-undo"
+                    onClick={() => undoTaken(dose)}
+                    disabled={pendingScheduleId === dose.scheduleId}
+                  >
+                    Desmarcar
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
+                  className="today-doses-mark"
                   onClick={() => markTaken(dose)}
                   disabled={pendingScheduleId === dose.scheduleId}
                 >
