@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getInitials } from "@/lib/family-format";
 import type { CurrentUser } from "@/hooks/use-family-store";
 import { PushNotificationsToggle } from "./push-notifications-toggle";
+import { InstallAppItem } from "./install-app-item";
 
 type UserMenuProps = {
   user: CurrentUser;
@@ -108,6 +109,7 @@ export function UserMenu({ user, onLogout, onOpenMembers, onOpenPrivacy }: UserM
             Privacidade
           </button>
           <PushNotificationsToggle />
+          <InstallAppItem />
           <button className="user-menu-item" type="button" role="menuitem" onClick={logout}>
             Sair
           </button>
