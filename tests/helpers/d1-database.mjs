@@ -33,18 +33,25 @@ class LocalD1PreparedStatement {
    * has an explicit `fields` selection — e.g. any multi-table join with
    * `.select({...})` — and maps the result back to those fields *by column
    * position*, not by name (see `mapResultRow` in drizzle-orm's d1/session).
-   * That matters here because a join can select same-named columns from
-   * different tables (e.g. `medications.id` and `relatives.id` in the same
-   * query): `.all()`'s plain JS objects silently collapse duplicate keys,
-   * so deriving `.raw()` from `.all()` (as this used to) would lose
-   * columns and desync the positional mapping. `setReturnArrays` gets
-   * genuinely positional rows straight from node:sqlite instead, with every
-   * selected column intact regardless of name collisions.
+   *
+   * `node:sqlite`'s `StatementSync` has no positional/array output mode in
+   * the Node version this project targets (`.nvmrc`) — `setReturnArrays`
+   * only exists in newer Node builds, so relying on it here breaks CI
+   * (pinned via `.nvmrc`) even though it works locally on a newer Node.
+   * `Object.values(row)` on `.all()`'s plain-object rows is positionally
+   * correct too, *as long as every selected column has a unique name* —
+   * callers that join same-named columns from different tables (e.g.
+   * `medications.id` and `relatives.id`) must alias them explicitly with
+   * `sql\`${col}\`.as("alias")` (plain `.select({ key: col })` does NOT
+   * emit a SQL-level alias — see db/queries/reminders.ts for the pattern).
+   * Without a real SQL alias, `.all()`'s row object would silently
+   * collapse the duplicate key, and `Object.values()` would just be
+   * positionally wrong instead of erroring — there's no way to detect
+   * that case here, so it's on the caller to alias everything.
    */
   async raw() {
-    const statement = this.database.prepare(this.query);
-    statement.setReturnArrays(true);
-    return statement.all(...this.parameters);
+    const { results } = await this.all();
+    return results.map((row) => Object.values(row));
   }
 
   async first(column) {

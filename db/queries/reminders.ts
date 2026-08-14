@@ -8,7 +8,7 @@
  * sits outside the service class. Nothing here should be reachable from a
  * request handler.
  */
-import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { FamilyCareDatabase } from "../index.ts";
 import {
   familyMembers,
@@ -66,15 +66,27 @@ export async function findDueSchedules(
 
   const rows = await db
     .select({
-      scheduleId: medicationSchedules.id,
+      // `id` and `name` each appear on more than one joined table below
+      // (medicationSchedules/relatives both have `id`; medications/relatives
+      // both have `name`) — plain `.select({ key: column })` does NOT emit a
+      // SQL-level alias (drizzle relies on column *position*, not name, to
+      // map results back), so without an explicit `sql\`...\`.as(...)` the
+      // raw SQL result has two columns literally both named "id" (or
+      // "name"). That's harmless for real D1 (its `.raw()` is genuinely
+      // positional) but collapses one of the pair when running against the
+      // local `node:sqlite`-backed test double (`tests/helpers/d1-database.mjs`,
+      // which has no positional-array API to fall back on) — alias every
+      // colliding column explicitly so the underlying SQL never has two
+      // same-named output columns in the first place.
+      scheduleId: sql<string>`${medicationSchedules.id}`.as("scheduleId"),
       familyId: medicationSchedules.familyId,
       medicationId: medicationSchedules.medicationId,
       timeOfDay: medicationSchedules.timeOfDay,
       daysOfWeek: medicationSchedules.daysOfWeek,
       quantity: medicationSchedules.quantity,
-      medicationName: medications.name,
-      relativeId: relatives.id,
-      relativeName: relatives.name,
+      medicationName: sql<string>`${medications.name}`.as("medicationName"),
+      relativeId: sql<string>`${relatives.id}`.as("relativeId"),
+      relativeName: sql<string>`${relatives.name}`.as("relativeName"),
     })
     .from(medicationSchedules)
     .innerJoin(
