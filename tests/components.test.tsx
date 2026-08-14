@@ -619,4 +619,18 @@ describe("Membros e convites", () => {
       expect(invitations[0]).toMatchObject({ emailNormalized: "convidado@example.com", role: "viewer" });
     });
   });
+
+  test("abre Membros e Privacidade pelo menu da conta — o único caminho até eles que sobrevive no mobile, onde a navegação de topo fica escondida", async () => {
+    const user = userEvent.setup();
+    await renderApp([]);
+
+    await user.click(await screen.findByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitem", { name: "Membros" }));
+    const membersDialog = await screen.findByRole("dialog", { name: "Membros" });
+    await user.click(within(membersDialog).getByRole("button", { name: "Fechar" }));
+
+    await user.click(screen.getByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitem", { name: "Privacidade" }));
+    expect(await screen.findByRole("dialog", { name: /Seus dados ficam protegidos/ })).toBeTruthy();
+  });
 });
