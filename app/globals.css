@@ -180,12 +180,27 @@ button { cursor: pointer; }
 .today-doses-time { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-weight: 800; font-size: 12px; }
 .today-doses-list li strong { display: block; font-size: 13px; }
 .today-doses-list li small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
-.today-doses-mark { border: 1.5px solid var(--teal); border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-doses-mark { display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--teal); border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
 .today-doses-mark:hover { background: #cce8e2; }
+/* A dose sitting unmarked past its grace period (see OVERDUE_GRACE_MS) —
+   red instead of teal, with a bell, so it reads as needing attention
+   rather than just another routine action. */
+.today-doses-mark--overdue { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.today-doses-mark--overdue:hover { background: #ffdfd8; }
 .today-doses-done-group { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .today-doses-done { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
 .today-doses-undo { border: 0; background: transparent; padding: 0; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; white-space: nowrap; }
 .today-doses-undo:hover { color: var(--red); text-decoration-color: currentColor; }
+/* Segmented Agora/Dia todo control — keeps the list from growing huge
+   with many medications by defaulting to just the current stretch of
+   the day (see DAY_PERIODS in lib/family-format.ts). */
+.today-doses-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface-soft); }
+.today-doses-tabs button { border: 0; border-radius: 7px; padding: 5px 10px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 750; }
+.today-doses-tabs button.active { background: var(--surface); color: var(--teal-dark); box-shadow: 0 1px 3px rgba(31,66,63,.12); }
+.today-doses-period + .today-doses-period { margin-top: 14px; }
+.today-doses-period-heading { margin: 0 0 8px; color: var(--muted); font-size: 11px; font-weight: 850; text-transform: uppercase; letter-spacing: .5px; }
+.today-doses-period-heading--overdue { display: inline-flex; align-items: center; gap: 5px; color: var(--red); }
+.today-doses-empty-period { margin: 0; color: var(--muted); font-size: 12px; }
 .empty-family-record { min-height: 430px; display: grid; place-items: center; padding: 40px; text-align: center; }
 .empty-family-record > div { max-width: 360px; }
 .empty-family-record > div > span { width: 58px; height: 58px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 18px; background: var(--mint); color: var(--teal); }
@@ -326,7 +341,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
   .today-doses { margin: 0 20px 20px; }
   .today-doses-list li { grid-template-columns: 58px 1fr; row-gap: 10px; }
   .today-doses-mark, .today-doses-done-group { grid-column: 1 / -1; }
-  .today-doses-mark { width: 100%; text-align: center; }
+  .today-doses-mark { width: 100%; justify-content: center; }
   .today-doses-done-group { flex-direction: row; align-items: center; justify-content: space-between; }
   .notes { margin: 0 20px 20px; }
   footer { padding: 22px; display: block; }

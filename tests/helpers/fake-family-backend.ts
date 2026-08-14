@@ -401,7 +401,11 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
             timeOfDay: schedule.timeOfDay,
             quantity: schedule.quantity,
             occurrenceDate,
-            scheduledAt: Date.now(),
+            // Resolved from the schedule's own `timeOfDay` (not `Date.now()`)
+            // so a dose whose time already passed reads as genuinely
+            // overdue in the UI, the way the real backend's
+            // `scheduledInstant()` reports it.
+            scheduledAt: new Date(`${occurrenceDate}T${schedule.timeOfDay}:00`).getTime(),
             takenAt: takenDoses.get(doseKey(schedule.id, occurrenceDate)) ?? null,
           })),
       );
