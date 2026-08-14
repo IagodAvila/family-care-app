@@ -318,6 +318,16 @@ input[aria-invalid="true"] { border-color: var(--red); }
   .vitals-grid, .emergency-active .vitals-grid { padding: 16px; grid-template-columns: 1fr; }
   .vital-card { min-height: auto; }
   .medications-section { padding: 20px; }
+  /* The time+name+button row was cramming "Marcar como tomado" into
+     whatever sliver of width was left over on narrow screens, squashing
+     the pill. Below 650px the button (or the "Tomado"/"Desmarcar" pair)
+     drops to its own full-width row instead of fighting for space
+     alongside the time and medication name. */
+  .today-doses { margin: 0 20px 20px; }
+  .today-doses-list li { grid-template-columns: 58px 1fr; row-gap: 10px; }
+  .today-doses-mark, .today-doses-done-group { grid-column: 1 / -1; }
+  .today-doses-mark { width: 100%; text-align: center; }
+  .today-doses-done-group { flex-direction: row; align-items: center; justify-content: space-between; }
   .notes { margin: 0 20px 20px; }
   footer { padding: 22px; display: block; }
   footer p { margin: 7px 0; }
