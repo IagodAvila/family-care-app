@@ -18,6 +18,8 @@ export default function Home() {
     authState,
     user,
     familyId,
+    families,
+    switchFamily,
     family,
     justSaved,
     error,
@@ -32,6 +34,10 @@ export default function Home() {
     pendingLocalImport,
     confirmLocalImport,
     dismissLocalImport,
+    pendingFamilyImport,
+    startFamilyImport,
+    confirmFamilyImport,
+    dismissFamilyImport,
     logout,
   } = useFamilyStore();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,7 +63,7 @@ export default function Home() {
     if (inviteError) reportError(inviteError);
     if (invited) {
       setJustJoinedFamily(true);
-      window.setTimeout(() => setJustJoinedFamily(false), 4000);
+      window.setTimeout(() => setJustJoinedFamily(false), 8000);
     }
     window.history.replaceState(null, "", window.location.pathname);
   }, [reportError]);
@@ -145,6 +151,10 @@ export default function Home() {
     <main className={emergencyMode ? "app emergency-active" : "app"}>
       <AppHeader
         user={user}
+        familyId={familyId}
+        families={families}
+        onSwitchFamily={switchFamily}
+        onImportFromFamily={startFamilyImport}
         onLogout={logout}
         onOpenMembers={() => setShowMembers(true)}
         onOpenPrivacy={() => setShowPrivacy(true)}
@@ -192,7 +202,8 @@ export default function Home() {
 
       {justJoinedFamily && (
         <div className="save-toast" role="status" aria-live="polite">
-          Convite aceito! Você agora faz parte da família.
+          Convite aceito! Você agora faz parte da família. Se já tinha dados
+          cadastrados, dá pra trazê-los pelo menu da conta, em &quot;Minhas famílias&quot;.
         </div>
       )}
 
@@ -211,6 +222,17 @@ export default function Home() {
           confirmLabel="Importar"
           onCancel={dismissLocalImport}
           onConfirm={confirmLocalImport}
+        />
+      )}
+
+      {pendingFamilyImport && (
+        <ConfirmDialog
+          titleId="import-family-title"
+          title="Importar dados de outra família?"
+          description={`A família "${pendingFamilyImport.sourceName}" tem ${pendingFamilyImport.relatives.length} familiar(es) cadastrado(s). Deseja copiá-los para a família atual? Os dados de "${pendingFamilyImport.sourceName}" continuam lá, nada é apagado.`}
+          confirmLabel="Importar"
+          onCancel={dismissFamilyImport}
+          onConfirm={confirmFamilyImport}
         />
       )}
 

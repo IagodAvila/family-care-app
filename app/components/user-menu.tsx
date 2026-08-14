@@ -2,12 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getInitials } from "@/lib/family-format";
-import type { CurrentUser } from "@/hooks/use-family-store";
+import type { CurrentUser, FamilyMembership } from "@/hooks/use-family-store";
 import { PushNotificationsToggle } from "./push-notifications-toggle";
 import { InstallAppItem } from "./install-app-item";
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  caregiver: "Cuidador",
+  viewer: "Somente leitura",
+};
+
 type UserMenuProps = {
   user: CurrentUser;
+  familyId: string | null;
+  families: FamilyMembership[];
+  onSwitchFamily: (id: string) => void;
+  onImportFromFamily: (id: string) => void;
   onLogout: () => void;
   onOpenMembers: () => void;
   onOpenPrivacy: () => void;
@@ -20,7 +30,16 @@ type UserMenuProps = {
  * could push past the edge of the screen on narrow devices. Follows the same
  * dismissable-popover pattern as the "more options" menu in medical-record.tsx.
  */
-export function UserMenu({ user, onLogout, onOpenMembers, onOpenPrivacy }: UserMenuProps) {
+export function UserMenu({
+  user,
+  familyId,
+  families,
+  onSwitchFamily,
+  onImportFromFamily,
+  onLogout,
+  onOpenMembers,
+  onOpenPrivacy,
+}: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +85,16 @@ export function UserMenu({ user, onLogout, onOpenMembers, onOpenPrivacy }: UserM
     onOpenPrivacy();
   }
 
+  function switchFamily(id: string) {
+    setOpen(false);
+    onSwitchFamily(id);
+  }
+
+  function importFromFamily(id: string) {
+    setOpen(false);
+    onImportFromFamily(id);
+  }
+
   return (
     <div className="user-menu" ref={menuRef}>
       <button
@@ -108,6 +137,50 @@ export function UserMenu({ user, onLogout, onOpenMembers, onOpenPrivacy }: UserM
           <button className="user-menu-item user-menu-item--toggle" type="button" role="menuitem" onClick={openPrivacy}>
             Privacidade
           </button>
+          {/* Only shown once someone belongs to more than one family (e.g.
+              they had their own before accepting an invite into someone
+              else's) — otherwise there's nothing to switch between. Nothing
+              is ever merged automatically: switching just changes which
+              family is on screen, and "Importar aqui" is an explicit,
+              reviewable action per family (see startFamilyImport). */}
+          {families.length > 1 && (
+            <div className="user-menu-families" role="group" aria-label="Minhas famílias">
+              <span className="user-menu-section-label">Minhas famílias</span>
+              {families.map((entry) => (
+                <div className="user-menu-family-row" key={entry.id}>
+                  <button
+                    className="user-menu-item user-menu-item--toggle"
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={entry.id === familyId}
+                    aria-label={
+                      entry.id === familyId
+                        ? `${entry.name}, família atual`
+                        : `Trocar para ${entry.name}`
+                    }
+                    onClick={() => switchFamily(entry.id)}
+                  >
+                    <span aria-hidden="true">
+                      {entry.id === familyId ? "✓ " : ""}
+                      {entry.name}
+                    </span>
+                    <small aria-hidden="true">{ROLE_LABELS[entry.role] ?? entry.role}</small>
+                  </button>
+                  {entry.id !== familyId && (
+                    <button
+                      className="user-menu-family-import"
+                      type="button"
+                      role="menuitem"
+                      title={`Trazer os familiares de "${entry.name}" para a família atual`}
+                      onClick={() => importFromFamily(entry.id)}
+                    >
+                      Importar aqui
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <PushNotificationsToggle />
           <InstallAppItem />
           <button className="user-menu-item" type="button" role="menuitem" onClick={logout}>

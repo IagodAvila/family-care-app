@@ -85,8 +85,11 @@ function storedRelative(overrides: Partial<Relative>): Relative {
  * Waits for the authenticated shell to mount before handing control back,
  * since that first render is always the "Carregando…" state.
  */
-async function renderApp(seedRelatives: readonly Relative[] = []) {
-  const backend = createFakeFamilyBackend(seedRelatives);
+async function renderApp(
+  seedRelatives: readonly Relative[] = [],
+  extraFamilies: Parameters<typeof createFakeFamilyBackend>[1] = [],
+) {
+  const backend = createFakeFamilyBackend(seedRelatives, extraFamilies);
   vi.stubGlobal("fetch", backend.fetch);
   render(<Home />);
   await screen.findByLabelText("Navegação principal");
@@ -658,6 +661,53 @@ describe("fluxos críticos do FamilyCare", () => {
     await waitFor(() => {
       expect(backend.getRelatives()[0].photoUrl).toBeNull();
     });
+  });
+});
+
+describe("Múltiplas famílias", () => {
+  test("troca entre famílias pelo menu da conta sem perder dados, e importa familiares de outra família", async () => {
+    const user = userEvent.setup();
+    const backend = await renderApp([], [
+      {
+        id: "family-2",
+        name: "Família de Vovó Teresinha",
+        relatives: [storedRelative({ id: "relative-99", name: "Teresinha Alves" })],
+      },
+    ]);
+
+    // Starts on the primary (oldest/default) family, which is empty.
+    const familyList = screen.getByRole("region", { name: "Lista de familiares" });
+    expect(within(familyList).queryByText("Teresinha Alves")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Menu da conta de Ana Teste" }));
+    expect(screen.getByRole("menuitemradio", { name: "Família de Ana Teste, família atual" })).toBeTruthy();
+
+    // Switching shows the other family's own data — nothing was merged.
+    await user.click(screen.getByRole("menuitemradio", { name: "Trocar para Família de Vovó Teresinha" }));
+    await within(familyList).findByText("Teresinha Alves");
+
+    // Switching back shows the primary family is still exactly as it was.
+    await user.click(screen.getByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Trocar para Família de Ana Teste" }));
+    await waitFor(() => {
+      expect(within(familyList).queryByText("Teresinha Alves")).toBeNull();
+    });
+
+    // Explicit, reviewable import: brings a *copy* into the active family.
+    await user.click(screen.getByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitem", { name: "Importar aqui" }));
+
+    const importDialog = await screen.findByRole("dialog", { name: "Importar dados de outra família?" });
+    expect(importDialog.textContent).toMatch(/Família de Vovó Teresinha/);
+    expect(importDialog.textContent).toMatch(/1 familiar/);
+    await user.click(within(importDialog).getByRole("button", { name: "Importar" }));
+
+    await within(familyList).findByText("Teresinha Alves");
+    await waitFor(() => {
+      expect(backend.getRelatives()).toHaveLength(1);
+    });
+    // A copy, not a move: the source family keeps its own original record.
+    expect(backend.getRelatives()[0].id).not.toBe("relative-99");
   });
 });
 

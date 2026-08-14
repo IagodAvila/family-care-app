@@ -87,9 +87,29 @@ function errorResponse(message: string, status: number, code?: string) {
   return jsonResponse({ error: message, code }, status);
 }
 
-export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = []) {
+/** A second (or third...) family the fake user also belongs to — for the family-switcher/cross-family-import flow. */
+type ExtraFamily = { id: string; name: string; relatives?: readonly Relative[] };
+
+export function createFakeFamilyBackend(
+  seedRelatives: readonly Relative[] = [],
+  extraFamilies: readonly ExtraFamily[] = [],
+) {
   let nextId = 1;
-  const relatives: StoredRelative[] = seedRelatives.map((relative) => toStoredRelative(relative, () => `seed-${nextId++}`));
+
+  // Only `family-1` (below) gets the full CRUD surface — the extra families
+  // exist solely so /api/me lists them and their relatives can be read (and
+  // then imported into family-1), matching what the family switcher and
+  // "Importar aqui" actually need from the backend in tests.
+  const relativesByFamily = new Map<string, StoredRelative[]>();
+  const familyNames = new Map<string, string>();
+  relativesByFamily.set(FAMILY_ID, seedRelatives.map((relative) => toStoredRelative(relative, () => `seed-${nextId++}`)));
+  familyNames.set(FAMILY_ID, "Família de Ana Teste");
+  for (const extra of extraFamilies) {
+    relativesByFamily.set(extra.id, (extra.relatives ?? []).map((relative) => toStoredRelative(relative, () => `seed-${nextId++}`)));
+    familyNames.set(extra.id, extra.name);
+  }
+  const relatives = relativesByFamily.get(FAMILY_ID)!;
+
   const members: StoredMember[] = [
     {
       userId: "user-1",
@@ -200,12 +220,21 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
     if (path === "/api/me" && method === "GET") {
       return jsonResponse({
         user: { id: "user-1", displayName: "Ana Teste", emailNormalized: "ana@example.com", avatarUrl: null },
-        families: [{ family: { id: FAMILY_ID, name: "Família de Ana Teste" }, role: "admin" }],
+        // Map preserves insertion order, so `family-1` (inserted first) is
+        // still `families[0]` — existing single-family tests keep picking
+        // it as the active family without any change in behavior.
+        families: [...relativesByFamily.keys()].map((id) => ({
+          family: { id, name: familyNames.get(id) ?? id },
+          role: "admin",
+        })),
       });
     }
 
-    if (path === `/api/families/${FAMILY_ID}/relatives` && method === "GET") {
-      return jsonResponse({ relatives });
+    const relativesListMatch = path.match(/^\/api\/families\/([^/]+)\/relatives$/);
+    if (relativesListMatch && method === "GET") {
+      const list = relativesByFamily.get(relativesListMatch[1]);
+      if (!list) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      return jsonResponse({ relatives: list });
     }
 
     if (path === `/api/families/${FAMILY_ID}/relatives` && method === "POST") {
@@ -469,7 +498,13 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
     }
 
     if (path === `/api/families/${FAMILY_ID}/import-local` && method === "POST") {
-      const imported = (body.relatives ?? []).map((relative: Relative) => toStoredRelative(relative, () => `imported-${nextId++}`));
+      // Real `toRelativeInput` (lib/family-data.ts) never forwards an `id`,
+      // so `createRelative` always mints a fresh one — matched here by
+      // stripping any incoming id before storing, so an import (whether
+      // from legacy localStorage or another family, see "Múltiplas
+      // famílias" below) always creates a new, independent copy.
+      const imported = (body.relatives ?? []).map((relative: Relative) =>
+        toStoredRelative({ ...relative, id: "" }, () => `imported-${nextId++}`));
       relatives.push(...imported);
       return jsonResponse({ imported: imported.length, relatives: imported });
     }

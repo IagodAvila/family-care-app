@@ -15,6 +15,8 @@ import type { Medication, Relative } from "@/types/family";
 
 /** Key the old client-only MVP used; only read here once, to offer a one-time import. */
 const LEGACY_STORAGE_KEY = "familycare-family";
+/** Remembers which of the user's families was last active, across reloads. */
+const ACTIVE_FAMILY_STORAGE_KEY = "familycare-active-family";
 /** How long the "changes saved" indicator stays visible. */
 const SAVE_INDICATOR_DURATION_MS = 2000;
 
@@ -25,6 +27,15 @@ export type CurrentUser = {
   emailNormalized: string;
   avatarUrl: string | null;
 };
+
+/** One family the signed-in user belongs to — used for the family switcher. */
+export type FamilyMembership = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+type MeFamiliesEntry = { family: { id: string; name: string }; role: string };
 
 type ServerMedication = {
   id: string;
@@ -128,11 +139,15 @@ export function useFamilyStore() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [families, setFamilies] = useState<FamilyMembership[]>([]);
   const [family, setFamily] = useState<Relative[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingLocalImport, setPendingLocalImport] = useState<Relative[] | null>(null);
+  const [pendingFamilyImport, setPendingFamilyImport] = useState<
+    { sourceFamilyId: string; sourceName: string; relatives: Relative[] } | null
+  >(null);
 
   const showSaved = useCallback(() => {
     setJustSaved(true);
@@ -157,7 +172,23 @@ export function useFamilyStore() {
         if (cancelled) return;
         setUser(me.user);
 
-        let activeFamilyId: string | undefined = me.families?.[0]?.family?.id;
+        let memberships: FamilyMembership[] = (me.families as MeFamiliesEntry[] ?? []).map((entry) => ({
+          id: entry.family.id,
+          name: entry.family.name,
+          role: entry.role,
+        }));
+
+        // Someone can belong to more than one family (e.g. they already had
+        // their own before accepting an invite into someone else's) — the
+        // server has no notion of "the" active one, so remember the user's
+        // last choice locally, falling back to the oldest family (position
+        // 0, since `/api/me` orders them by creation date) the first time,
+        // or if the remembered one was left/revoked since.
+        const remembered = window.localStorage.getItem(ACTIVE_FAMILY_STORAGE_KEY);
+        let activeFamilyId: string | undefined = memberships.some((m) => m.id === remembered)
+          ? (remembered as string)
+          : memberships[0]?.id;
+
         if (!activeFamilyId) {
           const label = me.user.displayName ?? me.user.emailNormalized;
           const created = await api("/api/families", {
@@ -165,9 +196,12 @@ export function useFamilyStore() {
             body: JSON.stringify({ name: `Família de ${label}` }),
           });
           activeFamilyId = created.family.id;
+          memberships = [{ id: created.family.id, name: created.family.name, role: "admin" }];
         }
         if (cancelled || !activeFamilyId) return;
+        setFamilies(memberships);
         setFamilyId(activeFamilyId);
+        window.localStorage.setItem(ACTIVE_FAMILY_STORAGE_KEY, activeFamilyId);
 
         const relatives = await loadRelatives(activeFamilyId);
         if (cancelled) return;
@@ -345,6 +379,63 @@ export function useFamilyStore() {
     setPendingLocalImport(null);
   }
 
+  /** Switches which of the user's families is active, remembering the choice for next time. */
+  async function switchFamily(id: string) {
+    if (id === familyId) return;
+    setFamilyId(id);
+    window.localStorage.setItem(ACTIVE_FAMILY_STORAGE_KEY, id);
+    try {
+      await loadRelatives(id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível trocar de família.");
+    }
+  }
+
+  /**
+   * Loads another family's relatives so they can be reviewed before copying
+   * them into the currently active family (see `confirmFamilyImport`). Never
+   * merges automatically — data from a different household shouldn't mix
+   * silently, so this is always an explicit, opt-in action from the menu.
+   */
+  async function startFamilyImport(sourceFamilyId: string) {
+    const source = families.find((entry) => entry.id === sourceFamilyId);
+    if (!source) return;
+
+    try {
+      const data = await api(`/api/families/${sourceFamilyId}/relatives`);
+      const relatives: Relative[] = (data.relatives as ServerRelative[]).map(fromServerRelative);
+      if (relatives.length === 0) {
+        setError(`A família "${source.name}" ainda não tem nenhum familiar cadastrado.`);
+        return;
+      }
+      setPendingFamilyImport({ sourceFamilyId, sourceName: source.name, relatives });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível carregar os dados dessa família.");
+    }
+  }
+
+  async function confirmFamilyImport() {
+    if (!familyId || !pendingFamilyImport) return;
+    try {
+      // Reuses the same server-side import used for the legacy-localStorage
+      // flow — it only cares that it receives an array of relative-shaped
+      // objects, not where they came from.
+      await api(`/api/families/${familyId}/import-local`, {
+        method: "POST",
+        body: JSON.stringify({ relatives: pendingFamilyImport.relatives }),
+      });
+      setPendingFamilyImport(null);
+      await loadRelatives(familyId);
+      showSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível importar os dados dessa família.");
+    }
+  }
+
+  function dismissFamilyImport() {
+    setPendingFamilyImport(null);
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     window.location.reload();
@@ -354,6 +445,8 @@ export function useFamilyStore() {
     authState,
     user,
     familyId,
+    families,
+    switchFamily,
     family,
     justSaved,
     error,
@@ -369,6 +462,10 @@ export function useFamilyStore() {
     pendingLocalImport,
     confirmLocalImport,
     dismissLocalImport,
+    pendingFamilyImport,
+    startFamilyImport,
+    confirmFamilyImport,
+    dismissFamilyImport,
     logout,
   };
 }

@@ -1,9 +1,13 @@
-import type { CurrentUser } from "@/hooks/use-family-store";
+import type { CurrentUser, FamilyMembership } from "@/hooks/use-family-store";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 
 type AppHeaderProps = {
   user: CurrentUser | null;
+  familyId: string | null;
+  families: FamilyMembership[];
+  onSwitchFamily: (id: string) => void;
+  onImportFromFamily: (id: string) => void;
   onLogout: () => void;
   onOpenMembers: () => void;
   onOpenPrivacy: () => void;
@@ -11,6 +15,10 @@ type AppHeaderProps = {
 
 export function AppHeader({
   user,
+  familyId,
+  families,
+  onSwitchFamily,
+  onImportFromFamily,
   onLogout,
   onOpenMembers,
   onOpenPrivacy,
@@ -33,6 +41,10 @@ export function AppHeader({
         {user && (
           <UserMenu
             user={user}
+            familyId={familyId}
+            families={families}
+            onSwitchFamily={onSwitchFamily}
+            onImportFromFamily={onImportFromFamily}
             onLogout={onLogout}
             onOpenMembers={onOpenMembers}
             onOpenPrivacy={onOpenPrivacy}
