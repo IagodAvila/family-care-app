@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import { CalendarDays, Clock, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarDays, ChevronDown, Clock, Plus, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { addDaysToDate } from "@/lib/family-data";
 import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
@@ -56,7 +56,6 @@ export function MedicationSchedules({
   medicationName,
   readOnly,
 }: MedicationSchedulesProps) {
-  const switchId = useId();
   const [open, setOpen] = useState(false);
   const [schedules, setSchedules] = useState<MedicationSchedule[] | null>(null);
   const [draft, setDraft] = useState<DraftSchedule>(createEmptyDraft);
@@ -150,19 +149,22 @@ export function MedicationSchedules({
   return (
     <div className="medication-schedules">
       <div className="medication-schedules-toggle-row">
-        {/* Plain label, not a button — only the switch opens the panel below. */}
-        <label className="medication-schedules-label" htmlFor={switchId}>
+        {/* Plain label, not a button — only the arrow expands the panel below.
+            A switch would wrongly imply "the schedules are only active while
+            this is on"; an accordion arrow doesn't carry that on/off meaning. */}
+        <span className="medication-schedules-label">
           <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
           Horários
-        </label>
-        <input
-          type="checkbox"
-          role="switch"
-          id={switchId}
-          className="medication-schedules-switch"
-          checked={open}
-          onChange={(event) => setOpen(event.target.checked)}
-        />
+        </span>
+        <button
+          type="button"
+          className="medication-schedules-expand"
+          aria-expanded={open}
+          aria-label={open ? "Ocultar horários" : "Mostrar horários"}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <ChevronDown aria-hidden="true" size={15} strokeWidth={ICON_STROKE} />
+        </button>
       </div>
 
       {!open && schedules && schedules.length > 0 && (
@@ -267,24 +269,7 @@ export function MedicationSchedules({
                 ))}
               </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={draft.treatmentEnabled}
-                className={
-                  draft.treatmentEnabled
-                    ? "medication-schedules-treatment-toggle active"
-                    : "medication-schedules-treatment-toggle"
-                }
-                onClick={() =>
-                  setDraft((current) => ({ ...current, treatmentEnabled: !current.treatmentEnabled }))
-                }
-              >
-                <CalendarDays aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
-                Tratamento com duração definida
-              </button>
-
-              {draft.treatmentEnabled && (
+              {draft.treatmentEnabled ? (
                 <div className="medication-schedules-treatment">
                   <label>
                     Início
@@ -317,7 +302,23 @@ export function MedicationSchedules({
                       Termina em {formatDate(addDaysToDate(draft.startDate, draft.durationDays - 1))}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className="medication-schedules-treatment-remove"
+                    onClick={() => setDraft((current) => ({ ...current, treatmentEnabled: false }))}
+                  >
+                    Remover duração
+                  </button>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  className="medication-schedules-treatment-link"
+                  onClick={() => setDraft((current) => ({ ...current, treatmentEnabled: true }))}
+                >
+                  <CalendarDays aria-hidden="true" size={12} strokeWidth={ICON_STROKE} />
+                  Definir duração do tratamento
+                </button>
               )}
 
               <button type="submit" className="medication-schedules-add" disabled={busy}>

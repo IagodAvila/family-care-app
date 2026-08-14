@@ -121,20 +121,16 @@ button { cursor: pointer; }
 .empty-medications { padding: 28px; border: 1px dashed var(--line); border-radius: 14px; color: #526c69; font-size: 13px; text-align: center; }
 
 .medication-schedules { padding: 0 15px 12px; }
-.medication-schedules-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; }
-.medication-schedules-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 750; cursor: pointer; }
-/* A real checkbox (not a chip button, unlike the treatment toggle above) —
-   pairing it with the label via htmlFor/id gets native click-forwarding
-   for free, so clicking "Horários" also flips the switch. Explicitly
-   overrides every property the generic `input, select, textarea` rule
-   sets (width/border/padding/background/appearance), since that rule
-   would otherwise turn a bare checkbox into an oversized text-field box —
-   the same issue the treatment toggle hit before it became a chip. */
-.medication-schedules-switch { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 34px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; transition: background .15s ease; }
-.medication-schedules-switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s ease; }
-.medication-schedules-switch:checked { background: var(--teal); }
-.medication-schedules-switch:checked::before { transform: translateX(14px); }
-.medication-schedules-switch:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.medication-schedules-toggle-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.medication-schedules-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 750; }
+/* A plain accordion arrow, not a switch — a switch reads as "on/off",
+   which would wrongly suggest the schedules are only active while this is
+   toggled. Small icon-only button, not the row-wide button this used to
+   be either. */
+.medication-schedules-expand { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); }
+.medication-schedules-expand:hover { background: var(--mint); color: var(--teal-dark); }
+.medication-schedules-expand svg { transition: transform .15s ease; }
+.medication-schedules-expand[aria-expanded="true"] svg { transform: rotate(180deg); }
 /* Visible with the panel collapsed too — the times/deadline at a glance. */
 .medication-schedules-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
 .medication-schedules-summary li { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; background: var(--mint); color: var(--teal-dark); font-size: 11px; font-weight: 800; }
@@ -160,13 +156,10 @@ button { cursor: pointer; }
 .medication-schedules-weekdays button.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
 .medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-schedules-add:hover { background: #cce8e2; }
-/* Same pill-toggle language as the weekday chips above, not a native
-   checkbox — this app has no checkbox elsewhere, and the global
-   `input, select, textarea` rule (styled for text fields) would otherwise
-   stretch a bare `<input type="checkbox">` into an oversized box. */
-.medication-schedules-treatment-toggle { flex-basis: 100%; display: inline-flex; align-items: center; gap: 6px; width: fit-content; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 750; }
-.medication-schedules-treatment-toggle:hover { border-color: #b8d9d4; }
-.medication-schedules-treatment-toggle.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
+/* A small text link, not a button/chip filling the row — this is a minor,
+   optional add-on to a schedule, not a primary action. */
+.medication-schedules-treatment-link { flex-basis: 100%; display: inline-flex; align-items: center; gap: 5px; width: fit-content; border: 0; background: transparent; padding: 2px 0; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.medication-schedules-treatment-link:hover { color: var(--teal-dark); text-decoration-color: currentColor; }
 .medication-schedules-treatment { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-top: 2px; padding: 12px; border: 1px dashed #b8d9d4; border-radius: 10px; background: var(--mint); }
 .medication-schedules-treatment label { display: grid; gap: 5px; color: var(--teal-dark); font-size: 11px; font-weight: 750; }
 .medication-schedules-form input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font-size: 12px; accent-color: var(--teal); }
@@ -175,6 +168,8 @@ button { cursor: pointer; }
 .medication-schedules-treatment-days { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .medication-schedules-treatment input[type="number"] { width: 48px; }
 .medication-schedules-treatment-end { padding-bottom: 7px; color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-schedules-treatment-remove { border: 0; background: transparent; padding: 0 0 7px; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.medication-schedules-treatment-remove:hover { color: var(--red); text-decoration-color: currentColor; }
 :root[data-theme="dark"] .medication-schedules-treatment { border-color: #33645c; }
 :root[data-theme="dark"] .medication-schedules-form input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(70%) sepia(31%) saturate(451%) hue-rotate(120deg); }
 

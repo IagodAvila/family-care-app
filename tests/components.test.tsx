@@ -384,7 +384,7 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    await user.click(await screen.findByRole("switch", { name: "Horários" }));
+    await user.click(await screen.findByRole("button", { name: "Mostrar horários" }));
     await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
 
     expect(await screen.findByText("08:00")).toBeTruthy();
@@ -402,12 +402,11 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    const toggle = await screen.findByRole("switch", { name: "Horários" });
-    await user.click(toggle);
+    await user.click(await screen.findByRole("button", { name: "Mostrar horários" }));
     await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
     expect(await screen.findByText("08:00")).toBeTruthy();
 
-    await user.click(toggle); // fecha o painel
+    await user.click(screen.getByRole("button", { name: "Ocultar horários" })); // fecha o painel
     expect(screen.queryByText("Todos os dias")).toBeNull(); // detalhe do painel some
     expect(screen.getByText("08:00")).toBeTruthy(); // resumo continua visível
   });
@@ -419,8 +418,8 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Amoxicilina");
-    await user.click(await screen.findByRole("switch", { name: "Horários" }));
-    await user.click(screen.getByRole("switch", { name: "Tratamento com duração definida" }));
+    await user.click(await screen.findByRole("button", { name: "Mostrar horários" }));
+    await user.click(screen.getByRole("button", { name: "Definir duração do tratamento" }));
 
     fireEvent.change(
       screen.getByLabelText("Início do tratamento com Amoxicilina"),
