@@ -395,6 +395,23 @@ describe("fluxos críticos do FamilyCare", () => {
     expect(await screen.findByText("Nenhum horário cadastrado.")).toBeTruthy();
   });
 
+  test("mostra os horários definidos mesmo com o painel de horários fechado", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    const toggle = await screen.findByRole("button", { name: "Horários" });
+    await user.click(toggle);
+    await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
+    expect(await screen.findByText("08:00")).toBeTruthy();
+
+    await user.click(toggle); // fecha o painel
+    expect(screen.queryByText("Todos os dias")).toBeNull(); // detalhe do painel some
+    expect(screen.getByText("08:00")).toBeTruthy(); // resumo continua visível
+  });
+
   test("cadastra um tratamento com duração definida e mostra a data de término calculada", async () => {
     await renderApp([storedRelative({
       medications: [{ name: "Amoxicilina", dosage: "500 mg" }],

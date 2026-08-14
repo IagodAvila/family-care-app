@@ -64,8 +64,10 @@ export function MedicationSchedules({
 
   const basePath = `/api/families/${familyId}/relatives/${relativeId}/medications/${medicationId}/schedules`;
 
+  // Fetched on mount (not gated by `open`) so the compact summary below the
+  // toggle button — the horários and treatment deadline, at a glance — is
+  // visible even with the full panel collapsed.
   useEffect(() => {
-    if (!open || schedules !== null) return;
     let cancelled = false;
     api(basePath)
       .then((data) => {
@@ -79,7 +81,7 @@ export function MedicationSchedules({
     return () => {
       cancelled = true;
     };
-  }, [open, schedules, basePath]);
+  }, [basePath]);
 
   function toggleDay(day: number) {
     setDraft((current) => ({
@@ -160,6 +162,24 @@ export function MedicationSchedules({
           <ChevronDown aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
         )}
       </button>
+
+      {!open && schedules && schedules.length > 0 && (
+        <ul className="medication-schedules-summary">
+          {schedules.map((schedule) => {
+            const ended = Boolean(schedule.endDate && schedule.endDate < today);
+            return (
+              <li key={schedule.id} className={ended ? "ended" : undefined}>
+                {formatTime(schedule.timeOfDay)}
+                {schedule.endDate && (
+                  <span className="medication-schedules-summary-deadline">
+                    {ended ? "encerrado" : `até ${formatDate(schedule.endDate)}`}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {open && (
         <div className="medication-schedules-panel">
