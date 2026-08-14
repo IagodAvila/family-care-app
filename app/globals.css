@@ -166,8 +166,9 @@ button { cursor: pointer; }
 .medication-schedules-treatment-days { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .medication-schedules-treatment input[type="number"] { width: 48px; }
 .medication-schedules-treatment-end { padding-bottom: 7px; color: var(--teal-dark); font-size: 12px; font-weight: 800; }
-.medication-schedules-treatment-remove { border: 0; background: transparent; padding: 0 0 7px; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
-.medication-schedules-treatment-remove:hover { color: var(--red); text-decoration-color: currentColor; }
+/* Same pill-button sizing as .medication-schedules-treatment-link/.medication-schedules-add, red instead of mint — a real clickable (destructive) button, not a text link. */
+.medication-schedules-treatment-remove { border: 0; border-radius: 8px; padding: 7px 10px; background: var(--red-soft); color: var(--red); font-size: 12px; font-weight: 800; }
+.medication-schedules-treatment-remove:hover { background: #ffdfd8; }
 :root[data-theme="dark"] .medication-schedules-treatment { border-color: #33645c; }
 :root[data-theme="dark"] .medication-schedules-form input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(70%) sepia(31%) saturate(451%) hue-rotate(120deg); }
 
