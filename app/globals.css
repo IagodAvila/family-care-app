@@ -143,12 +143,23 @@ button { cursor: pointer; }
 .medication-schedules-weekdays button.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
 .medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-schedules-add:hover { background: #cce8e2; }
-.medication-schedules-treatment-toggle { flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
-.medication-schedules-treatment { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.medication-schedules-form input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font-size: 12px; }
+/* Same pill-toggle language as the weekday chips above, not a native
+   checkbox — this app has no checkbox elsewhere, and the global
+   `input, select, textarea` rule (styled for text fields) would otherwise
+   stretch a bare `<input type="checkbox">` into an oversized box. */
+.medication-schedules-treatment-toggle { flex-basis: 100%; display: inline-flex; align-items: center; gap: 6px; width: fit-content; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 750; }
+.medication-schedules-treatment-toggle:hover { border-color: #b8d9d4; }
+.medication-schedules-treatment-toggle.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
+.medication-schedules-treatment { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-top: 2px; padding: 12px; border: 1px dashed #b8d9d4; border-radius: 10px; background: var(--mint); }
+.medication-schedules-treatment label { display: grid; gap: 5px; color: var(--teal-dark); font-size: 11px; font-weight: 750; }
+.medication-schedules-form input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font-size: 12px; accent-color: var(--teal); }
+.medication-schedules-form input[type="date"]::-webkit-calendar-picker-indicator { opacity: .65; filter: invert(33%) sepia(22%) saturate(1234%) hue-rotate(131deg); }
+.medication-schedules-form input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
+.medication-schedules-treatment-days { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .medication-schedules-treatment input[type="number"] { width: 48px; }
-.medication-schedules-treatment span { color: var(--muted); font-size: 11px; }
-.medication-schedules-treatment-end { color: var(--teal-dark); font-weight: 750; }
+.medication-schedules-treatment-end { padding-bottom: 7px; color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+:root[data-theme="dark"] .medication-schedules-treatment { border-color: #33645c; }
+:root[data-theme="dark"] .medication-schedules-form input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(70%) sepia(31%) saturate(451%) hue-rotate(120deg); }
 
 .today-doses { margin: 0 28px 28px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; }
 .today-doses-error { margin: 0 0 10px; color: var(--red); font-size: 12px; }

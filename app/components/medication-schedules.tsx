@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Clock, Plus, X } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronUp, Clock, Plus, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { addDaysToDate } from "@/lib/family-data";
 import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
@@ -245,37 +245,51 @@ export function MedicationSchedules({
                 ))}
               </div>
 
-              <label className="medication-schedules-treatment-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.treatmentEnabled}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, treatmentEnabled: event.target.checked }))
-                  }
-                />
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.treatmentEnabled}
+                className={
+                  draft.treatmentEnabled
+                    ? "medication-schedules-treatment-toggle active"
+                    : "medication-schedules-treatment-toggle"
+                }
+                onClick={() =>
+                  setDraft((current) => ({ ...current, treatmentEnabled: !current.treatmentEnabled }))
+                }
+              >
+                <CalendarDays aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
                 Tratamento com duração definida
-              </label>
+              </button>
 
               {draft.treatmentEnabled && (
                 <div className="medication-schedules-treatment">
-                  <input
-                    type="date"
-                    value={draft.startDate}
-                    onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
-                    aria-label={`Início do tratamento com ${medicationName}`}
-                    required
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={Number.isNaN(draft.durationDays) ? "" : draft.durationDays}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, durationDays: event.target.valueAsNumber }))
-                    }
-                    aria-label="Duração do tratamento, em dias"
-                  />
-                  <span>dias</span>
+                  <label>
+                    Início
+                    <input
+                      type="date"
+                      value={draft.startDate}
+                      onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
+                      aria-label={`Início do tratamento com ${medicationName}`}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Duração
+                    <span className="medication-schedules-treatment-days">
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={Number.isNaN(draft.durationDays) ? "" : draft.durationDays}
+                        onChange={(event) =>
+                          setDraft((current) => ({ ...current, durationDays: event.target.valueAsNumber }))
+                        }
+                        aria-label="Duração do tratamento, em dias"
+                      />
+                      dias
+                    </span>
+                  </label>
                   {draft.startDate && Number.isSafeInteger(draft.durationDays) && draft.durationDays > 0 && (
                     <span className="medication-schedules-treatment-end">
                       Termina em {formatDate(addDaysToDate(draft.startDate, draft.durationDays - 1))}

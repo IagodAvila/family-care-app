@@ -403,7 +403,7 @@ describe("fluxos críticos do FamilyCare", () => {
 
     await screen.findByText("Amoxicilina");
     await user.click(await screen.findByRole("button", { name: "Horários" }));
-    await user.click(screen.getByLabelText("Tratamento com duração definida"));
+    await user.click(screen.getByRole("switch", { name: "Tratamento com duração definida" }));
 
     fireEvent.change(
       screen.getByLabelText("Início do tratamento com Amoxicilina"),
