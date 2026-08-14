@@ -384,15 +384,19 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    await user.click(await screen.findByRole("button", { name: "Horários" }));
-    await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
+    // Scoped to the medication row: adding a horário now also refreshes the
+    // "Hoje" section live (see SCHEDULES_CHANGED_EVENT in today-doses.tsx),
+    // which renders its own separate "08:00" elsewhere on the page.
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
 
-    expect(await screen.findByText("08:00")).toBeTruthy();
-    expect(screen.getByText("Todos os dias")).toBeTruthy();
-    expect(screen.getByText("1x")).toBeTruthy();
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("Todos os dias")).toBeTruthy();
+    expect(within(medicationItem).getByText("1x")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Remover horário das 08:00" }));
-    expect(await screen.findByText("Nenhum horário cadastrado.")).toBeTruthy();
+    await user.click(within(medicationItem).getByRole("button", { name: "Remover horário das 08:00" }));
+    expect(await within(medicationItem).findByText("Nenhum horário cadastrado.")).toBeTruthy();
   });
 
   test("mostra os horários definidos mesmo com o painel de horários fechado", async () => {
@@ -402,13 +406,32 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    await user.click(await screen.findByRole("button", { name: "Horários" }));
-    await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
-    expect(await screen.findByText("08:00")).toBeTruthy();
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Horários" })); // fecha o painel
-    expect(screen.queryByText("Todos os dias")).toBeNull(); // detalhe do painel some
-    expect(screen.getByText("08:00")).toBeTruthy(); // resumo continua visível
+    await user.click(within(medicationItem).getByRole("button", { name: "Horários" })); // fecha o painel
+    expect(within(medicationItem).queryByText("Todos os dias")).toBeNull(); // detalhe do painel some
+    expect(within(medicationItem).getByText("08:00")).toBeTruthy(); // resumo continua visível
+  });
+
+  test("a seção Hoje aparece sozinha ao cadastrar um horário, sem precisar recarregar a página", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    expect(screen.queryByText("Hoje")).toBeNull(); // nada cadastrado ainda
+
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
+
+    // SCHEDULES_CHANGED_EVENT dispara o refresh da seção Hoje — sem clicar em nada além do formulário de horário.
+    expect(await screen.findByText("Hoje")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Marcar como tomado" })).toBeTruthy();
   });
 
   test("cadastra um tratamento com duração definida e mostra a data de término calculada", async () => {

@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { addDaysToDate } from "@/lib/family-data";
 import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
 import type { MedicationSchedule } from "@/types/family";
+import { SCHEDULES_CHANGED_EVENT } from "./today-doses";
 
 const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 const ICON_STROKE = 1.75;
@@ -124,6 +125,10 @@ export function MedicationSchedules({
       const created = await api(basePath, { method: "POST", body: JSON.stringify(payload) });
       setSchedules((current) => [...(current ?? []), created.schedule]);
       setDraft(createEmptyDraft());
+      // Lets the "Hoje" section (a sibling component, not a parent/child of
+      // this one) pick up the new schedule right away instead of waiting
+      // for its next poll — see today-doses.tsx.
+      window.dispatchEvent(new Event(SCHEDULES_CHANGED_EVENT));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Não foi possível salvar o horário.");
     } finally {
@@ -137,6 +142,7 @@ export function MedicationSchedules({
     try {
       await api(`${basePath}/${schedule.id}?expectedVersion=${schedule.version}`, { method: "DELETE" });
       setSchedules((current) => (current ?? []).filter((item) => item.id !== schedule.id));
+      window.dispatchEvent(new Event(SCHEDULES_CHANGED_EVENT));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Não foi possível remover o horário.");
     } finally {

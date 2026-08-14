@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, Clock } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { formatTime } from "@/lib/family-format";
 import type { DueDose } from "@/types/family";
 
 const ICON_STROKE = 1.75;
+/** Catches a newly-due dose (or one someone else on the family just marked/undid) without a full page reload. */
+const POLL_INTERVAL_MS = 60_000;
+/** Dispatched by medication-schedules.tsx after adding/removing a horário, so this refreshes right away instead of waiting for the next poll. */
+export const SCHEDULES_CHANGED_EVENT = "familycare:schedules-changed";
 
 type TodayDosesProps = {
   familyId: string;
@@ -19,6 +23,11 @@ type TodayDosesProps = {
  * tomado" action per occurrence. Renders nothing once loaded if there's
  * nothing due today, rather than an empty section taking up space.
  *
+ * Refreshes on its own — via polling, on tab/window focus, and on
+ * `SCHEDULES_CHANGED_EVENT` — rather than only ever fetching once, so new
+ * doses (or changes made elsewhere/by someone else) show up without the
+ * user having to reload the page.
+ *
  * The caller passes `key={relativeId}` (see medical-record.tsx) so this
  * remounts on relative change instead of resetting `doses`/`error` inside
  * the effect — a fresh instance already starts at their `null` initial
@@ -30,21 +39,35 @@ export function TodayDoses({ familyId, relativeId }: TodayDosesProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    api(`/api/families/${familyId}/relatives/${relativeId}/doses`)
-      .then((data) => {
-        if (!cancelled) setDoses(data.doses);
-      })
-      .catch((caught) => {
-        if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : "Não foi possível carregar os horários de hoje.");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+  const refresh = useCallback(async () => {
+    try {
+      const data = await api(`/api/families/${familyId}/relatives/${relativeId}/doses`);
+      setDoses(data.doses);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível carregar os horários de hoje.");
+    }
   }, [familyId, relativeId]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- Loads today's doses from the server once on mount (and re-subscribes the polling/focus/event listeners below), same pattern as members-panel.tsx. */
+  useEffect(() => {
+    refresh();
+
+    const interval = window.setInterval(refresh, POLL_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    window.addEventListener(SCHEDULES_CHANGED_EVENT, refresh);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(SCHEDULES_CHANGED_EVENT, refresh);
+    };
+  }, [refresh]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   async function markTaken(dose: DueDose) {
     setPendingScheduleId(dose.scheduleId);
