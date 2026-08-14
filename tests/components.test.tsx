@@ -286,16 +286,28 @@ describe("fluxos críticos do FamilyCare", () => {
       return realFetch(input, init);
     });
 
+    // `fireEvent.change` em vez de `user.type`: digitar os 62 caracteres um a
+    // um dispara 62 atualizações de estado, e o teste não é sobre a mecânica
+    // de digitação — é sobre o fluxo de sugestão. Menos corrida, mais rápido.
     const textarea = within(dialog).getByPlaceholderText(/pressão alta/);
-    await user.type(textarea, "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias.");
-    await user.click(within(dialog).getByRole("button", { name: "Sugerir preenchimento com IA" }));
+    fireEvent.change(textarea, {
+      target: { value: "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias." },
+    });
 
-    // Targets the `role="status"` live region directly instead of
-    // `findByText(/regex/)` — the exact "Sugestões aplicadas em ..." string
-    // includes the AI's own field list (`appliedTo.join(", ")`), so a
-    // regex anchored to just the prefix intermittently failed to match the
-    // full element depending on how the text happened to be queried. The
-    // note is the only `role="status"` region in this form either way.
+    // O botão fica `disabled` enquanto o texto estiver vazio, e o userEvent
+    // clica em botão desabilitado sem reclamar — vira um no-op silencioso
+    // que só apareceria lá embaixo como "não achei o role=status", mascarando
+    // a causa. Esperar habilitar torna a pré-condição explícita.
+    const assistButton = within(dialog).getByRole("button", {
+      name: "Sugerir preenchimento com IA",
+    }) as HTMLButtonElement;
+    await waitFor(() => expect(assistButton.disabled).toBe(false));
+    await user.click(assistButton);
+
+    // Busca a região `role="status"` diretamente em vez de
+    // `findByText(/regex/)`: o texto completo inclui a lista de campos que a
+    // IA preencheu (`appliedTo.join(", ")`), e é a única região desse tipo
+    // no formulário.
     const assistNote = await within(dialog).findByRole("status");
     expect(assistNote.textContent).toMatch(/Sugestões aplicadas/);
     expect(within(dialog).getByText("Losartana")).toBeTruthy();
