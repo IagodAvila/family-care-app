@@ -124,7 +124,7 @@ button { cursor: pointer; }
 /* Same outlined-button language as .edit-button (teal/green outline,
    white fill) — a real clickable button, not a bare label + separate
    arrow/switch. The chevron inside rotates with `aria-expanded`. */
-.medication-schedules-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #b8d9d4; border-radius: 999px; padding: 6px 12px; background: var(--surface); color: var(--teal-dark); font-size: 11px; font-weight: 750; }
+.medication-schedules-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--teal); border-radius: 999px; padding: 6px 12px; background: var(--surface); color: var(--teal-dark); font-size: 11px; font-weight: 750; }
 .medication-schedules-toggle:hover { background: var(--mint); }
 .medication-schedules-toggle svg:last-child { transition: transform .15s ease; }
 .medication-schedules-toggle[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
@@ -151,12 +151,12 @@ button { cursor: pointer; }
 .medication-schedules-weekdays { display: inline-flex; gap: 4px; }
 .medication-schedules-weekdays button { border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; }
 .medication-schedules-weekdays button.active { border-color: var(--teal); background: var(--mint); color: var(--teal-dark); }
-.medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-schedules-add { display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--teal); border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-schedules-add:hover { background: #cce8e2; }
 /* Same clickable-pill language as .medication-schedules-add ("Adicionar
    horário"), not a full-row chip — this is an optional add-on, but still
    a real, obviously-clickable button. */
-.medication-schedules-treatment-link { flex-basis: 100%; width: fit-content; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-schedules-treatment-link { flex-basis: 100%; width: fit-content; display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--teal); border-radius: 8px; padding: 7px 10px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-schedules-treatment-link:hover { background: #cce8e2; }
 .medication-schedules-treatment { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-top: 2px; padding: 12px; border: 1px dashed #b8d9d4; border-radius: 10px; background: var(--mint); }
 .medication-schedules-treatment label { display: grid; gap: 5px; color: var(--teal-dark); font-size: 11px; font-weight: 750; }
@@ -167,7 +167,7 @@ button { cursor: pointer; }
 .medication-schedules-treatment input[type="number"] { width: 48px; }
 .medication-schedules-treatment-end { padding-bottom: 7px; color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 /* Same pill-button sizing as .medication-schedules-treatment-link/.medication-schedules-add, red instead of mint — a real clickable (destructive) button, not a text link. */
-.medication-schedules-treatment-remove { border: 0; border-radius: 8px; padding: 7px 10px; background: var(--red-soft); color: var(--red); font-size: 12px; font-weight: 800; }
+.medication-schedules-treatment-remove { border: 1.5px solid var(--red); border-radius: 8px; padding: 7px 10px; background: var(--red-soft); color: var(--red); font-size: 12px; font-weight: 800; }
 .medication-schedules-treatment-remove:hover { background: #ffdfd8; }
 :root[data-theme="dark"] .medication-schedules-treatment { border-color: #33645c; }
 :root[data-theme="dark"] .medication-schedules-form input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(70%) sepia(31%) saturate(451%) hue-rotate(120deg); }
@@ -180,7 +180,7 @@ button { cursor: pointer; }
 .today-doses-time { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-weight: 800; font-size: 12px; }
 .today-doses-list li strong { display: block; font-size: 13px; }
 .today-doses-list li small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
-.today-doses-mark { border: 0; border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-doses-mark { border: 1.5px solid var(--teal); border-radius: 8px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
 .today-doses-mark:hover { background: #cce8e2; }
 .today-doses-done-group { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .today-doses-done { display: inline-flex; align-items: center; gap: 5px; color: var(--teal-dark); font-size: 12px; font-weight: 800; white-space: nowrap; }
