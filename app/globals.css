@@ -121,8 +121,20 @@ button { cursor: pointer; }
 .empty-medications { padding: 28px; border: 1px dashed var(--line); border-radius: 14px; color: #526c69; font-size: 13px; text-align: center; }
 
 .medication-schedules { padding: 0 15px 12px; }
-.medication-schedules-toggle { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 4px 0; color: var(--muted); font-size: 11px; font-weight: 750; }
-.medication-schedules-toggle:hover { color: var(--teal-dark); }
+.medication-schedules-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.medication-schedules-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 750; cursor: pointer; }
+/* A real checkbox (not a chip button, unlike the treatment toggle above) —
+   pairing it with the label via htmlFor/id gets native click-forwarding
+   for free, so clicking "Horários" also flips the switch. Explicitly
+   overrides every property the generic `input, select, textarea` rule
+   sets (width/border/padding/background/appearance), since that rule
+   would otherwise turn a bare checkbox into an oversized text-field box —
+   the same issue the treatment toggle hit before it became a chip. */
+.medication-schedules-switch { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 34px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; transition: background .15s ease; }
+.medication-schedules-switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s ease; }
+.medication-schedules-switch:checked { background: var(--teal); }
+.medication-schedules-switch:checked::before { transform: translateX(14px); }
+.medication-schedules-switch:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 /* Visible with the panel collapsed too — the times/deadline at a glance. */
 .medication-schedules-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
 .medication-schedules-summary li { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; background: var(--mint); color: var(--teal-dark); font-size: 11px; font-weight: 800; }

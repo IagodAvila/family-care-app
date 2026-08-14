@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronUp, Clock, Plus, X } from "lucide-react";
+import { useEffect, useId, useState } from "react";
+import { CalendarDays, Clock, Plus, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { addDaysToDate } from "@/lib/family-data";
 import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
@@ -56,6 +56,7 @@ export function MedicationSchedules({
   medicationName,
   readOnly,
 }: MedicationSchedulesProps) {
+  const switchId = useId();
   const [open, setOpen] = useState(false);
   const [schedules, setSchedules] = useState<MedicationSchedule[] | null>(null);
   const [draft, setDraft] = useState<DraftSchedule>(createEmptyDraft);
@@ -148,20 +149,21 @@ export function MedicationSchedules({
 
   return (
     <div className="medication-schedules">
-      <button
-        type="button"
-        className="medication-schedules-toggle"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-      >
-        <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
-        Horários
-        {open ? (
-          <ChevronUp aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
-        ) : (
-          <ChevronDown aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
-        )}
-      </button>
+      <div className="medication-schedules-toggle-row">
+        {/* Plain label, not a button — only the switch opens the panel below. */}
+        <label className="medication-schedules-label" htmlFor={switchId}>
+          <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+          Horários
+        </label>
+        <input
+          type="checkbox"
+          role="switch"
+          id={switchId}
+          className="medication-schedules-switch"
+          checked={open}
+          onChange={(event) => setOpen(event.target.checked)}
+        />
+      </div>
 
       {!open && schedules && schedules.length > 0 && (
         <ul className="medication-schedules-summary">

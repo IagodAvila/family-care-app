@@ -384,7 +384,7 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    await user.click(await screen.findByRole("button", { name: "Horários" }));
+    await user.click(await screen.findByRole("switch", { name: "Horários" }));
     await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
 
     expect(await screen.findByText("08:00")).toBeTruthy();
@@ -402,7 +402,7 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Losartana");
-    const toggle = await screen.findByRole("button", { name: "Horários" });
+    const toggle = await screen.findByRole("switch", { name: "Horários" });
     await user.click(toggle);
     await user.click(await screen.findByRole("button", { name: "Adicionar horário" }));
     expect(await screen.findByText("08:00")).toBeTruthy();
@@ -419,7 +419,7 @@ describe("fluxos críticos do FamilyCare", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Amoxicilina");
-    await user.click(await screen.findByRole("button", { name: "Horários" }));
+    await user.click(await screen.findByRole("switch", { name: "Horários" }));
     await user.click(screen.getByRole("switch", { name: "Tratamento com duração definida" }));
 
     fireEvent.change(
