@@ -65,6 +65,18 @@ function timezoneOffsetMinutes(instant: number): number {
 }
 
 /**
+ * "YYYY-MM-DD" + N days -> "YYYY-MM-DD". Plain calendar-day arithmetic, no
+ * timezone conversion involved (unlike `scheduledInstant` below) — used to
+ * derive a treatment's `endDate` from its `startDate` + `durationDays`.
+ */
+export function addDaysToDateString(dateString: string, days: number): string {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * Resolves the epoch-ms instant for a wall-clock `occurrenceDate` +
  * `timeOfDay` in `APP_TIMEZONE`. Two-pass to be correct across a DST
  * transition, even though Brazil hasn't observed DST since 2019.

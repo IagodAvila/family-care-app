@@ -63,6 +63,15 @@ export type MedicationScheduleInput = {
   daysOfWeek?: number[];
   quantity?: number;
   position?: number;
+  /**
+   * A dated treatment ("10 dias de amoxicilina") vs. an ongoing/indefinite
+   * one (e.g. daily blood pressure medication, the default): pass both
+   * `startDate` ("YYYY-MM-DD") and `durationDays`, or neither — one
+   * without the other is rejected by `validateScheduleInput`. `endDate` is
+   * never accepted as input; it's always derived from these two.
+   */
+  startDate?: string;
+  durationDays?: number;
 };
 
 export type UpdateMedicationScheduleInput = MedicationScheduleInput & {

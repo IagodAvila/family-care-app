@@ -17,6 +17,10 @@ export type MedicationSchedule = {
   timeOfDay: string;
   daysOfWeek: number[];
   quantity: number;
+  /** All three null together (ongoing schedule) or all three set (dated treatment) — see db/schema.ts. */
+  startDate: string | null;
+  durationDays: number | null;
+  endDate: string | null;
 };
 
 /** One schedule occurrence due today, paired with its dose if already logged — see `FamilyCareDataService.listTodayDoses`. */

@@ -35,6 +35,9 @@ type StoredDoseSchedule = {
   timeOfDay: string;
   daysOfWeek: number[];
   quantity: number;
+  startDate: string | null;
+  durationDays: number | null;
+  endDate: string | null;
 };
 
 type StoredRelative = {
@@ -157,6 +160,30 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
   const takenDoses = new Map<string, number>();
   const todayOccurrenceDate = () => new Date().toISOString().slice(0, 10);
   const doseKey = (scheduleId: string, occurrenceDate: string) => `${scheduleId}:${occurrenceDate}`;
+
+  function addDaysToDate(dateString: string, days: number): string {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  /** Both `startDate`/`durationDays` present, or neither — mirrors `validateScheduleInput`. */
+  function toTreatmentWindow(body: { startDate?: string; durationDays?: number }) {
+    if (body.startDate == null || body.durationDays == null) {
+      return { startDate: null, durationDays: null, endDate: null };
+    }
+    return {
+      startDate: body.startDate,
+      durationDays: body.durationDays,
+      endDate: addDaysToDate(body.startDate, body.durationDays - 1),
+    };
+  }
+
+  function isWithinTreatmentWindow(schedule: StoredDoseSchedule, occurrenceDate: string): boolean {
+    if (!schedule.startDate || !schedule.endDate) return true;
+    return occurrenceDate >= schedule.startDate && occurrenceDate <= schedule.endDate;
+  }
 
   async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     // Built from the raw args instead of `new Request(input, init)`: that
@@ -308,6 +335,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
           timeOfDay: body.timeOfDay ?? "08:00",
           daysOfWeek: body.daysOfWeek ?? [1, 2, 3, 4, 5, 6, 7],
           quantity: body.quantity ?? 1,
+          ...toTreatmentWindow(body),
         };
         medication.doseSchedules.push(created);
         return jsonResponse({ schedule: created }, 201);
@@ -327,6 +355,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
           daysOfWeek: body.daysOfWeek ?? schedule.daysOfWeek,
           quantity: body.quantity ?? schedule.quantity,
           version: schedule.version + 1,
+          ...toTreatmentWindow(body),
         });
         return jsonResponse({ schedule });
       }
@@ -355,17 +384,19 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
       if (!relative) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
       const occurrenceDate = todayOccurrenceDate();
       const doses = relative.medications.flatMap((medication) =>
-        medication.doseSchedules.map((schedule) => ({
-          scheduleId: schedule.id,
-          medicationId: medication.id,
-          medicationName: medication.name,
-          dosage: medication.dosage,
-          timeOfDay: schedule.timeOfDay,
-          quantity: schedule.quantity,
-          occurrenceDate,
-          scheduledAt: Date.now(),
-          takenAt: takenDoses.get(doseKey(schedule.id, occurrenceDate)) ?? null,
-        })),
+        medication.doseSchedules
+          .filter((schedule) => isWithinTreatmentWindow(schedule, occurrenceDate))
+          .map((schedule) => ({
+            scheduleId: schedule.id,
+            medicationId: medication.id,
+            medicationName: medication.name,
+            dosage: medication.dosage,
+            timeOfDay: schedule.timeOfDay,
+            quantity: schedule.quantity,
+            occurrenceDate,
+            scheduledAt: Date.now(),
+            takenAt: takenDoses.get(doseKey(schedule.id, occurrenceDate)) ?? null,
+          })),
       );
       return jsonResponse({ doses });
     }

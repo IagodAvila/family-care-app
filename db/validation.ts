@@ -9,6 +9,7 @@ import type {
 } from "./domain.ts";
 import { FamilyCareDataError } from "./errors.ts";
 import { familyRoles, type FamilyRole } from "./schema.ts";
+import { addDaysToDateString } from "./time.ts";
 
 function requireText(value: string, maximumLength: number): string {
   const normalized = value.trim();
@@ -164,6 +165,58 @@ function daysOfWeek(values: number[] | undefined): number[] {
   return unique.sort((a, b) => a - b);
 }
 
+/** Rejects malformed AND calendar-invalid ("2024-02-30") dates; unlike `validateOccurrenceDate`, doesn't restrict past/future — a treatment can start any day. */
+function validateCalendarDate(value: string): string {
+  const normalized = requireText(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  const [year, month, day] = normalized.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return normalized;
+}
+
+const MAX_TREATMENT_DURATION_DAYS = 365;
+
+/**
+ * A dated treatment: both `startDate` and `durationDays` present, or
+ * neither (an ongoing schedule) — one without the other is rejected.
+ * `endDate` is always derived here, never accepted as input.
+ */
+function validateTreatmentDuration(
+  startDateInput: string | undefined,
+  durationDaysInput: number | undefined,
+): { startDate: string | null; durationDays: number | null; endDate: string | null } {
+  if (startDateInput === undefined && durationDaysInput === undefined) {
+    return { startDate: null, durationDays: null, endDate: null };
+  }
+  if (startDateInput === undefined || durationDaysInput === undefined) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  const startDate = validateCalendarDate(startDateInput);
+  if (
+    !Number.isSafeInteger(durationDaysInput)
+    || durationDaysInput < 1
+    || durationDaysInput > MAX_TREATMENT_DURATION_DAYS
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  return {
+    startDate,
+    durationDays: durationDaysInput,
+    endDate: addDaysToDateString(startDate, durationDaysInput - 1),
+  };
+}
+
 export function validateScheduleInput(
   input: MedicationScheduleInput | UpdateMedicationScheduleInput,
 ) {
@@ -177,11 +230,14 @@ export function validateScheduleInput(
     throw new FamilyCareDataError("INVALID_INPUT");
   }
 
+  const treatment = validateTreatmentDuration(input.startDate, input.durationDays);
+
   return {
     timeOfDay,
     daysOfWeek: daysOfWeek(input.daysOfWeek),
     quantity,
     position: position(input.position),
+    ...treatment,
   };
 }
 

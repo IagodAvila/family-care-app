@@ -3,15 +3,36 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Clock, Plus, X } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
+import { addDaysToDate } from "@/lib/family-data";
+import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
 import type { MedicationSchedule } from "@/types/family";
 
 const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 const ICON_STROKE = 1.75;
 
-type DraftSchedule = { timeOfDay: string; daysOfWeek: number[]; quantity: number };
+type DraftSchedule = {
+  timeOfDay: string;
+  daysOfWeek: number[];
+  quantity: number;
+  treatmentEnabled: boolean;
+  startDate: string;
+  durationDays: number;
+};
 
-const EMPTY_DRAFT: DraftSchedule = { timeOfDay: "08:00", daysOfWeek: ALL_WEEKDAYS, quantity: 1 };
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createEmptyDraft(): DraftSchedule {
+  return {
+    timeOfDay: "08:00",
+    daysOfWeek: ALL_WEEKDAYS,
+    quantity: 1,
+    treatmentEnabled: false,
+    startDate: todayIsoDate(),
+    durationDays: 10,
+  };
+}
 
 type MedicationSchedulesProps = {
   familyId: string;
@@ -37,7 +58,7 @@ export function MedicationSchedules({
 }: MedicationSchedulesProps) {
   const [open, setOpen] = useState(false);
   const [schedules, setSchedules] = useState<MedicationSchedule[] | null>(null);
-  const [draft, setDraft] = useState<DraftSchedule>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<DraftSchedule>(createEmptyDraft);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -75,12 +96,32 @@ export function MedicationSchedules({
       setError("Selecione ao menos um dia da semana.");
       return;
     }
+    if (draft.treatmentEnabled && !draft.startDate) {
+      setError("Informe a data de início do tratamento.");
+      return;
+    }
+    if (!Number.isSafeInteger(draft.quantity) || draft.quantity < 1) {
+      setError("Informe uma quantidade válida.");
+      return;
+    }
+    if (draft.treatmentEnabled && (!Number.isSafeInteger(draft.durationDays) || draft.durationDays < 1)) {
+      setError("Informe uma duração válida, em dias.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const created = await api(basePath, { method: "POST", body: JSON.stringify(draft) });
+      const payload = {
+        timeOfDay: draft.timeOfDay,
+        daysOfWeek: draft.daysOfWeek,
+        quantity: draft.quantity,
+        ...(draft.treatmentEnabled
+          ? { startDate: draft.startDate, durationDays: draft.durationDays }
+          : {}),
+      };
+      const created = await api(basePath, { method: "POST", body: JSON.stringify(payload) });
       setSchedules((current) => [...(current ?? []), created.schedule]);
-      setDraft(EMPTY_DRAFT);
+      setDraft(createEmptyDraft());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Não foi possível salvar o horário.");
     } finally {
@@ -100,6 +141,8 @@ export function MedicationSchedules({
       setBusy(false);
     }
   }
+
+  const today = todayIsoDate();
 
   return (
     <div className="medication-schedules">
@@ -128,27 +171,36 @@ export function MedicationSchedules({
             <p className="medication-schedules-empty">Nenhum horário cadastrado.</p>
           ) : (
             <ul className="medication-schedules-list">
-              {schedules.map((schedule) => (
-                <li key={schedule.id}>
-                  <span className="medication-schedules-time">{formatTime(schedule.timeOfDay)}</span>
-                  <span className="medication-schedules-days">
-                    {schedule.daysOfWeek.length === 7
-                      ? "Todos os dias"
-                      : schedule.daysOfWeek.map((day) => WEEKDAY_LABELS[day]).join(", ")}
-                  </span>
-                  <span className="medication-schedules-quantity">{schedule.quantity}x</span>
-                  {!readOnly && (
-                    <button
-                      type="button"
-                      aria-label={`Remover horário das ${formatTime(schedule.timeOfDay)}`}
-                      disabled={busy}
-                      onClick={() => removeSchedule(schedule)}
-                    >
-                      <X aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
-                    </button>
-                  )}
-                </li>
-              ))}
+              {schedules.map((schedule) => {
+                const ended = Boolean(schedule.endDate && schedule.endDate < today);
+                return (
+                  <li key={schedule.id}>
+                    <span className="medication-schedules-time">{formatTime(schedule.timeOfDay)}</span>
+                    <span className="medication-schedules-days">
+                      {schedule.daysOfWeek.length === 7
+                        ? "Todos os dias"
+                        : schedule.daysOfWeek.map((day) => WEEKDAY_LABELS[day]).join(", ")}
+                      {schedule.startDate && schedule.endDate && (
+                        <small className="medication-schedules-treatment-range">
+                          {formatDate(schedule.startDate)} – {formatDate(schedule.endDate)}
+                          {ended && <span className="medication-schedules-ended">Encerrado</span>}
+                        </small>
+                      )}
+                    </span>
+                    <span className="medication-schedules-quantity">{schedule.quantity}x</span>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        aria-label={`Remover horário das ${formatTime(schedule.timeOfDay)}`}
+                        disabled={busy}
+                        onClick={() => removeSchedule(schedule)}
+                      >
+                        <X aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -165,9 +217,17 @@ export function MedicationSchedules({
                 type="number"
                 min={1}
                 max={100}
-                value={draft.quantity}
+                // Deliberately not `Number(value) || 1`: that fallback fires
+                // on every keystroke, including the momentarily-empty value
+                // while clearing the field to type a new number, which
+                // fights the user by snapping back to 1 before they can
+                // finish typing. `valueAsNumber` is NaN for "" or invalid
+                // input — a controlled number input renders NaN as empty,
+                // so the field can be cleared normally; validity is
+                // enforced on submit instead (see `addSchedule`).
+                value={Number.isNaN(draft.quantity) ? "" : draft.quantity}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, quantity: Number(event.target.value) || 1 }))
+                  setDraft((current) => ({ ...current, quantity: event.target.valueAsNumber }))
                 }
                 aria-label={`Quantidade para ${medicationName}`}
               />
@@ -184,6 +244,46 @@ export function MedicationSchedules({
                   </button>
                 ))}
               </div>
+
+              <label className="medication-schedules-treatment-toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.treatmentEnabled}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, treatmentEnabled: event.target.checked }))
+                  }
+                />
+                Tratamento com duração definida
+              </label>
+
+              {draft.treatmentEnabled && (
+                <div className="medication-schedules-treatment">
+                  <input
+                    type="date"
+                    value={draft.startDate}
+                    onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
+                    aria-label={`Início do tratamento com ${medicationName}`}
+                    required
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={Number.isNaN(draft.durationDays) ? "" : draft.durationDays}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, durationDays: event.target.valueAsNumber }))
+                    }
+                    aria-label="Duração do tratamento, em dias"
+                  />
+                  <span>dias</span>
+                  {draft.startDate && Number.isSafeInteger(draft.durationDays) && draft.durationDays > 0 && (
+                    <span className="medication-schedules-treatment-end">
+                      Termina em {formatDate(addDaysToDate(draft.startDate, draft.durationDays - 1))}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <button type="submit" className="medication-schedules-add" disabled={busy}>
                 <Plus aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
                 Adicionar horário

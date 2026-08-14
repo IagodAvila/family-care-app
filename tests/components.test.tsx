@@ -395,6 +395,31 @@ describe("fluxos críticos do FamilyCare", () => {
     expect(await screen.findByText("Nenhum horário cadastrado.")).toBeTruthy();
   });
 
+  test("cadastra um tratamento com duração definida e mostra a data de término calculada", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Amoxicilina", dosage: "500 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Amoxicilina");
+    await user.click(await screen.findByRole("button", { name: "Horários" }));
+    await user.click(screen.getByLabelText("Tratamento com duração definida"));
+
+    fireEvent.change(
+      screen.getByLabelText("Início do tratamento com Amoxicilina"),
+      { target: { value: "2027-01-15" } },
+    );
+    const durationInput = screen.getByLabelText("Duração do tratamento, em dias");
+    await user.clear(durationInput);
+    await user.type(durationInput, "10");
+
+    expect(await screen.findByText("Termina em 24/01/2027")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Adicionar horário" }));
+
+    expect(await screen.findByText("15/01/2027 – 24/01/2027")).toBeTruthy();
+  });
+
   test("marca uma dose de hoje como tomada", async () => {
     const relative = storedRelative({
       medications: [{ name: "Enalapril", dosage: "20 mg" }],
@@ -411,6 +436,9 @@ describe("fluxos críticos do FamilyCare", () => {
       timeOfDay: "08:00",
       daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
       quantity: 1,
+      startDate: null,
+      durationDays: null,
+      endDate: null,
     });
     vi.stubGlobal("fetch", backend.fetch);
     render(<Home />);

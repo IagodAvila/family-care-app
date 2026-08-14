@@ -8,7 +8,7 @@
  * sits outside the service class. Nothing here should be reachable from a
  * request handler.
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import type { FamilyCareDatabase } from "../index.ts";
 import {
   familyMembers,
@@ -97,6 +97,15 @@ export async function findDueSchedules(
       and(
         inArray(medicationSchedules.timeOfDay, times),
         isNull(medicationSchedules.deletedAt),
+        // Ongoing schedules (no startDate) are always in range; dated
+        // treatments only match while occurrenceDate falls within them.
+        or(
+          isNull(medicationSchedules.startDate),
+          and(
+            lte(medicationSchedules.startDate, occurrenceDate),
+            gte(medicationSchedules.endDate, occurrenceDate),
+          ),
+        ),
       ),
     )
     .all();

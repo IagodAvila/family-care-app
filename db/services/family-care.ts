@@ -1248,7 +1248,15 @@ export class FamilyCareDataService {
           )
           .orderBy(asc(medicationSchedules.timeOfDay))
           .all()
-      ).filter((schedule) => schedule.daysOfWeek.includes(weekday));
+      ).filter(
+        (schedule) =>
+          schedule.daysOfWeek.includes(weekday)
+          // Ongoing schedules (no startDate) are always active; dated
+          // treatments only count while occurrenceDate is within them —
+          // once a treatment's endDate passes it just stops showing up
+          // here (see `db/schema.ts`'s comment on the treatment columns).
+          && (!schedule.startDate || (occurrenceDate >= schedule.startDate! && occurrenceDate <= schedule.endDate!)),
+      );
       if (todaySchedules.length === 0) {
         return [];
       }

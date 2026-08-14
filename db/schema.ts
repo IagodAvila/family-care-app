@@ -262,6 +262,15 @@ export const medicationSchedules = sqliteTable(
       .notNull()
       .default([1, 2, 3, 4, 5, 6, 7]),
     quantity: integer("quantity").notNull().default(1),
+    // A dated treatment ("10 dias de amoxicilina") vs. an ongoing/indefinite
+    // one (e.g. daily blood pressure medication): all three are null
+    // together, or all three set together (see the check below). `endDate`
+    // is redundant with `startDate` + `durationDays` but is stored (not
+    // computed on read) so the cron sweep and "due today" query can filter
+    // on it directly instead of doing date arithmetic per row.
+    startDate: text("start_date"),
+    durationDays: integer("duration_days"),
+    endDate: text("end_date"),
     position: integer("position").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: text("created_by_user_id").references(() => users.id, {
@@ -303,6 +312,23 @@ export const medicationSchedules = sqliteTable(
     check(
       "medication_schedules_days_of_week_json_check",
       sql`json_valid(${table.daysOfWeek})`,
+    ),
+    check(
+      "medication_schedules_duration_days_check",
+      sql`${table.durationDays} is null or ${table.durationDays} > 0`,
+    ),
+    check(
+      "medication_schedules_start_date_check",
+      sql`${table.startDate} is null or ${table.startDate} glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+    ),
+    check(
+      "medication_schedules_end_date_check",
+      sql`${table.endDate} is null or ${table.endDate} glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+    ),
+    check(
+      "medication_schedules_treatment_window_check",
+      sql`(${table.startDate} is null and ${table.durationDays} is null and ${table.endDate} is null)
+        or (${table.startDate} is not null and ${table.durationDays} is not null and ${table.endDate} is not null)`,
     ),
   ],
 );

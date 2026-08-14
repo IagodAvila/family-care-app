@@ -318,6 +318,90 @@ test("rejeita horário de medicamento com formato ou dias da semana inválidos",
   );
 });
 
+test("calcula a data de término de um tratamento a partir do início e da duração", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "treatment-duration");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const schedule = await service.createSchedule(context, medication.id, {
+    timeOfDay: "08:00",
+    startDate: "2027-01-15",
+    durationDays: 10,
+  });
+  assert.equal(schedule.startDate, "2027-01-15");
+  assert.equal(schedule.durationDays, 10);
+  assert.equal(schedule.endDate, "2027-01-24"); // 10 dias incluindo o próprio dia 15
+
+  const madeOngoingAgain = await service.updateSchedule(context, schedule.id, {
+    timeOfDay: "08:00",
+    expectedVersion: schedule.version,
+  });
+  assert.equal(madeOngoingAgain.startDate, null);
+  assert.equal(madeOngoingAgain.durationDays, null);
+  assert.equal(madeOngoingAgain.endDate, null);
+});
+
+test("rejeita tratamento com só data de início ou só duração informada", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "treatment-partial");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  await expectDataError(
+    service.createSchedule(context, medication.id, { timeOfDay: "08:00", startDate: "2027-01-15" }),
+    "INVALID_INPUT",
+  );
+  await expectDataError(
+    service.createSchedule(context, medication.id, { timeOfDay: "08:00", durationDays: 10 }),
+    "INVALID_INPUT",
+  );
+  await expectDataError(
+    service.createSchedule(context, medication.id, {
+      timeOfDay: "08:00",
+      startDate: "2027-02-30", // fevereiro não tem dia 30
+      durationDays: 5,
+    }),
+    "INVALID_INPUT",
+  );
+});
+
+test("lista de hoje ignora tratamento que ainda não começou ou já terminou", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "treatment-window");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const ongoing = await service.createSchedule(context, medication.id, {
+    timeOfDay: "08:00",
+    daysOfWeek: [5],
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "09:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-16", // começa amanhã
+    durationDays: 5,
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "10:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-01",
+    durationDays: 10, // termina em 2027-01-10, antes de hoje (2027-01-15)
+  });
+  const active = await service.createSchedule(context, medication.id, {
+    timeOfDay: "11:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-10",
+    durationDays: 10, // termina em 2027-01-19, hoje está dentro
+  });
+
+  const due = await service.listTodayDoses(context, relative.id);
+  assert.deepEqual(
+    due.map((dose) => dose.scheduleId).sort(),
+    [ongoing.id, active.id].sort(),
+  );
+});
+
 test("registra dose tomada sem duplicar ao repetir a mesma ocorrência", async () => {
   const { db, service } = await createFixedClockTestContext();
   const { context } = await createFamilyFor(service, db, "dose-logger");
@@ -760,6 +844,35 @@ test("findDueSchedules encontra horários na janela de 5 minutos, no dia da sema
     due.map((item) => item.scheduleId).sort(),
     [dueExact.id, dueEdgeOfWindow.id].sort(),
   );
+});
+
+test("findDueSchedules ignora tratamento que ainda não começou ou já terminou", async () => {
+  const { db, service } = await createFixedClockTestContext();
+  const { context } = await createFamilyFor(service, db, "cron-treatment-window");
+  const relative = await service.createRelative(context, relativeInput());
+  const medication = await service.createMedication(context, relative.id, medicationInput());
+
+  const active = await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-10",
+    durationDays: 10, // termina em 2027-01-19 — hoje (2027-01-15) está dentro
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-01",
+    durationDays: 10, // termina em 2027-01-10 — já encerrado
+  });
+  await service.createSchedule(context, medication.id, {
+    timeOfDay: "05:00",
+    daysOfWeek: [5],
+    startDate: "2027-01-16", // começa amanhã
+    durationDays: 5,
+  });
+
+  const due = await findDueSchedules(db, FIXED_NOW);
+  assert.deepEqual(due.map((item) => item.scheduleId), [active.id]);
 });
 
 test("recordNotifiedOccurrence é idempotente: a segunda chamada para a mesma ocorrência não insere de novo", async () => {
