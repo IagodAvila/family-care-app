@@ -96,7 +96,7 @@ button { cursor: pointer; }
 .medications-section { padding: 25px 28px; }
 .section-heading { margin-bottom: 16px; }
 .medication-heading-actions { display: flex; align-items: center; gap: 12px; }
-.medication-heading-actions button { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 9px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
+.medication-heading-actions button { display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--teal); border-radius: 9px; padding: 8px 11px; background: var(--mint); color: var(--teal-dark); font-size: 12px; font-weight: 800; }
 .medication-heading-actions button:hover { background: #cce8e2; }
 .medication-list { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .medication-list-item { border-bottom: 1px solid var(--line); }
