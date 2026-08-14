@@ -19,11 +19,14 @@ import {
   NO_DATA_LABEL,
 } from "@/lib/family-format";
 import type { Relative } from "@/types/family";
+import { MedicationSchedules } from "./medication-schedules";
 import { PersonAvatar } from "./person-avatar";
+import { TodayDoses } from "./today-doses";
 
 type MedicalRecordProps = {
   emergencyMode: boolean;
   family: Relative[];
+  familyId: string | null;
   selected: Relative;
   onAddMedication: () => void;
   onDeleteRelative: () => void;
@@ -38,6 +41,7 @@ const ICON_STROKE = 1.75;
 export function MedicalRecord({
   emergencyMode,
   family,
+  familyId,
   selected,
   onAddMedication,
   onDeleteRelative,
@@ -252,27 +256,38 @@ export function MedicalRecord({
           <div className="medication-list">
             {selected.medications.map((medication, index) => (
               <div
-                className="medication-row"
+                className="medication-list-item"
                 key={`${medication.name}-${medication.dosage}-${index}`}
               >
-                <span className="pill-icon" aria-hidden="true">
-                  <Pill size={17} strokeWidth={ICON_STROKE} />
-                </span>
-                <div>
-                  <strong>{medication.name}</strong>
-                  <small>{getMedicationTiming(medication)}</small>
+                <div className="medication-row">
+                  <span className="pill-icon" aria-hidden="true">
+                    <Pill size={17} strokeWidth={ICON_STROKE} />
+                  </span>
+                  <div>
+                    <strong>{medication.name}</strong>
+                    <small>{getMedicationTiming(medication)}</small>
+                  </div>
+                  <b>{medication.dosage}</b>
+                  {!emergencyMode && (
+                    <button
+                      className="remove-medication"
+                      type="button"
+                      aria-label={`Remover ${medication.name}`}
+                      title={`Remover ${medication.name}`}
+                      onClick={() => onRemoveMedication(index)}
+                    >
+                      <X aria-hidden="true" size={16} strokeWidth={ICON_STROKE} />
+                    </button>
+                  )}
                 </div>
-                <b>{medication.dosage}</b>
-                {!emergencyMode && (
-                  <button
-                    className="remove-medication"
-                    type="button"
-                    aria-label={`Remover ${medication.name}`}
-                    title={`Remover ${medication.name}`}
-                    onClick={() => onRemoveMedication(index)}
-                  >
-                    <X aria-hidden="true" size={16} strokeWidth={ICON_STROKE} />
-                  </button>
+                {familyId && medication.id && (
+                  <MedicationSchedules
+                    familyId={familyId}
+                    relativeId={selected.id}
+                    medicationId={medication.id}
+                    medicationName={medication.name}
+                    readOnly={emergencyMode}
+                  />
                 )}
               </div>
             ))}
@@ -285,6 +300,8 @@ export function MedicalRecord({
           </div>
         )}
       </section>
+
+      {familyId && <TodayDoses key={selected.id} familyId={familyId} relativeId={selected.id} />}
 
       {selected.notes && (
         <section className="notes">

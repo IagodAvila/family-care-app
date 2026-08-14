@@ -27,6 +27,23 @@ export function formatDate(date: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(`${date}T12:00:00`));
 }
 
+/** "08:00" -> "08:00" (already display-ready; validates/normalizes stray input). */
+export function formatTime(timeOfDay: string) {
+  const match = String(timeOfDay ?? "").match(/^(\d{2}):(\d{2})$/);
+  return match ? `${match[1]}:${match[2]}` : timeOfDay;
+}
+
+/** ISO weekday (1=segunda..7=domingo) -> short pt-BR label, for the day-of-week toggle chips. */
+export const WEEKDAY_LABELS: Record<number, string> = {
+  1: "Seg",
+  2: "Ter",
+  3: "Qua",
+  4: "Qui",
+  5: "Sex",
+  6: "Sáb",
+  7: "Dom",
+};
+
 export function getMedicationTiming(medication: Medication) {
   const normalized = normalizeMedication(medication);
   return normalized.orientation || "Orientação de uso não informada";

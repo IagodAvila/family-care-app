@@ -90,6 +90,19 @@ export function displayDateToInternal(value: string): string {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
 }
 
+/**
+ * "YYYY-MM-DD" + N days -> "YYYY-MM-DD". Plain calendar-day arithmetic —
+ * used only for the live "termina em" preview while editing a treatment's
+ * duration; the server (db/time.ts's identical helper) always recomputes
+ * and stores the authoritative `endDate` on save.
+ */
+export function addDaysToDate(dateString: string, days: number): string {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export function validateBirthDate(
   value: string,
   today = new Date(),

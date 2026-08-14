@@ -3,6 +3,7 @@ import {
   asc,
   count,
   eq,
+  inArray,
   isNull,
   sql,
 } from "drizzle-orm";
@@ -13,9 +14,13 @@ import type {
   AuthorizedFamilyContext,
   CreateFamilyInput,
   CreateInvitationInput,
+  LogDoseInput,
   MedicationInput,
+  MedicationScheduleInput,
+  PushSubscriptionInput,
   RelativeInput,
   UpdateMedicationInput,
+  UpdateMedicationScheduleInput,
   UpdateRelativeInput,
 } from "../domain.ts";
 import { FamilyCareDataError, safely } from "../errors.ts";
@@ -25,22 +30,30 @@ import {
   families,
   familyMembers,
   invitations,
+  medicationDoses,
   medications,
+  medicationSchedules,
+  pushSubscriptions,
   relatives,
   users,
   type FamilyRole,
   type InvitationRow,
   type MedicationRow,
+  type MedicationScheduleRow,
   type RelativeRow,
 } from "../schema.ts";
+import { currentOccurrenceDate, currentWeekday, scheduledInstant } from "../time.ts";
 import { generateToken, hashToken } from "../token.ts";
 import {
   validateEmail,
   validateExpectedVersion,
   validateFamilyName,
   validateMedicationInput,
+  validateOccurrenceDate,
+  validatePushSubscriptionInput,
   validateRelativeInput,
   validateRole,
+  validateScheduleInput,
 } from "../validation.ts";
 
 /** Invitation links expire after 7 days (docs/architecture.md leaves the exact value to product judgment). */
@@ -990,6 +1003,377 @@ export class FamilyCareDataService {
     });
   }
 
+  async listSchedules(context: AuthorizedFamilyContext, medicationId: string) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "viewer");
+      await this.requireMedication(context, medicationId);
+      return this.db
+        .select()
+        .from(medicationSchedules)
+        .where(
+          and(
+            eq(medicationSchedules.medicationId, medicationId),
+            isNull(medicationSchedules.deletedAt),
+          ),
+        )
+        .orderBy(asc(medicationSchedules.position), asc(medicationSchedules.createdAt))
+        .all();
+    });
+  }
+
+  async getSchedule(context: AuthorizedFamilyContext, scheduleId: string) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "viewer");
+      return this.requireSchedule(context, scheduleId);
+    });
+  }
+
+  async createSchedule(
+    context: AuthorizedFamilyContext,
+    medicationId: string,
+    input: MedicationScheduleInput,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      await this.requireMedication(context, medicationId);
+      const values = validateScheduleInput(input);
+      const scheduleId = this.createId();
+      const now = this.now();
+
+      await this.db.batch([
+        this.db.insert(medicationSchedules).values({
+          id: scheduleId,
+          familyId: context.familyId,
+          medicationId,
+          ...values,
+          createdByUserId: context.userId,
+          updatedByUserId: context.userId,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        this.auditQuery({
+          context,
+          action: "schedule.created",
+          targetType: "medication_schedule",
+          targetId: scheduleId,
+          now,
+        }),
+      ]);
+
+      return this.requireSchedule(context, scheduleId);
+    });
+  }
+
+  async updateSchedule(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+    input: UpdateMedicationScheduleInput,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      this.validateIdentifier(scheduleId);
+      const values = validateScheduleInput(input);
+      const version = validateExpectedVersion(input.expectedVersion);
+      const current = await this.requireSchedule(context, scheduleId);
+      if (current.version !== version) {
+        throw new FamilyCareDataError("CONFLICT");
+      }
+      const now = this.now();
+
+      const [result] = await this.db.batch([
+        this.db
+          .update(medicationSchedules)
+          .set({
+            ...values,
+            updatedByUserId: context.userId,
+            updatedAt: now,
+            version: sql`${medicationSchedules.version} + 1`,
+          })
+          .where(
+            and(
+              eq(medicationSchedules.familyId, context.familyId),
+              eq(medicationSchedules.id, scheduleId),
+              isNull(medicationSchedules.deletedAt),
+              eq(medicationSchedules.version, version),
+            ),
+          ),
+        this.auditQuery({
+          context,
+          action: "schedule.updated",
+          targetType: "medication_schedule",
+          targetId: scheduleId,
+          now,
+        }),
+      ]);
+
+      this.requireChange(result);
+      return this.requireSchedule(context, scheduleId);
+    });
+  }
+
+  async deleteSchedule(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+    expectedVersion: number,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      this.validateIdentifier(scheduleId);
+      const version = validateExpectedVersion(expectedVersion);
+      const current = await this.requireSchedule(context, scheduleId);
+      if (current.version !== version) {
+        throw new FamilyCareDataError("CONFLICT");
+      }
+      const now = this.now();
+
+      const [result] = await this.db.batch([
+        this.db
+          .update(medicationSchedules)
+          .set({
+            deletedAt: now,
+            deletedByUserId: context.userId,
+            updatedByUserId: context.userId,
+            updatedAt: now,
+            version: sql`${medicationSchedules.version} + 1`,
+          })
+          .where(
+            and(
+              eq(medicationSchedules.familyId, context.familyId),
+              eq(medicationSchedules.id, scheduleId),
+              isNull(medicationSchedules.deletedAt),
+              eq(medicationSchedules.version, version),
+            ),
+          ),
+        this.auditQuery({
+          context,
+          action: "schedule.deleted",
+          targetType: "medication_schedule",
+          targetId: scheduleId,
+          now,
+        }),
+      ]);
+
+      this.requireChange(result);
+    });
+  }
+
+  /**
+   * Marks a dose occurrence as taken. Shares the exact `(scheduleId,
+   * occurrenceDate)` idempotency key used by the cron sweep in
+   * `db/queries/reminders.ts` — logging a dose the cron already notified
+   * for updates that same row instead of creating a duplicate.
+   */
+  async logDoseTaken(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+    input: LogDoseInput,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      const schedule = await this.requireSchedule(context, scheduleId);
+      const occurrenceDate = validateOccurrenceDate(input.occurrenceDate);
+      const takenAt = input.takenAt ?? this.now();
+      if (!Number.isSafeInteger(takenAt)) {
+        throw new FamilyCareDataError("INVALID_INPUT");
+      }
+      const notes = input.notes ? input.notes.trim().slice(0, 500) : null;
+      const now = this.now();
+      const doseId = this.createId();
+
+      await this.db
+        .insert(medicationDoses)
+        .values({
+          id: doseId,
+          familyId: context.familyId,
+          medicationId: schedule.medicationId,
+          scheduleId,
+          occurrenceDate,
+          scheduledAt: scheduledInstant(occurrenceDate, schedule.timeOfDay),
+          takenAt,
+          takenByUserId: context.userId,
+          notes,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [medicationDoses.scheduleId, medicationDoses.occurrenceDate],
+          set: { takenAt, takenByUserId: context.userId, notes, updatedAt: now },
+        });
+
+      return this.requireDose(scheduleId, occurrenceDate);
+    });
+  }
+
+  /**
+   * Reverts a dose mistakenly marked as taken. Clears `takenAt` (and who/
+   * notes) but leaves the `(scheduleId, occurrenceDate)` row itself in
+   * place — deleting it outright would let the cron re-claim the slot and
+   * send a duplicate reminder for an occurrence it already notified about.
+   */
+  async undoDoseTaken(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+    occurrenceDateInput: string,
+  ) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "caregiver");
+      await this.requireSchedule(context, scheduleId);
+      const occurrenceDate = validateOccurrenceDate(occurrenceDateInput);
+      const now = this.now();
+
+      const [result] = await this.db.batch([
+        this.db
+          .update(medicationDoses)
+          .set({ takenAt: null, takenByUserId: null, notes: null, updatedAt: now })
+          .where(
+            and(
+              eq(medicationDoses.scheduleId, scheduleId),
+              eq(medicationDoses.occurrenceDate, occurrenceDate),
+            ),
+          ),
+      ]);
+
+      this.requireChange(result);
+      return this.requireDose(scheduleId, occurrenceDate);
+    });
+  }
+
+  /**
+   * Today's schedule occurrences for a relative (in `APP_TIMEZONE`), each
+   * paired with its dose row if one already exists — the shape the "due
+   * today" / "mark as taken" UI needs. Not a full dose history browser;
+   * that's a reasonable follow-up if the user wants one later.
+   */
+  async listTodayDoses(context: AuthorizedFamilyContext, relativeId: string) {
+    return safely(async () => {
+      await requireFamilyRole(this.db, context, "viewer");
+      await this.requireRelative(context, relativeId);
+
+      const relativeMedications = await this.db
+        .select()
+        .from(medications)
+        .where(
+          and(
+            eq(medications.familyId, context.familyId),
+            eq(medications.relativeId, relativeId),
+            isNull(medications.deletedAt),
+          ),
+        )
+        .all();
+      if (relativeMedications.length === 0) {
+        return [];
+      }
+      const medicationIds = relativeMedications.map((medication) => medication.id);
+      const medicationById = new Map(relativeMedications.map((m) => [m.id, m]));
+
+      const now = this.now();
+      const occurrenceDate = currentOccurrenceDate(now);
+      const weekday = currentWeekday(now);
+
+      const todaySchedules = (
+        await this.db
+          .select()
+          .from(medicationSchedules)
+          .where(
+            and(
+              inArray(medicationSchedules.medicationId, medicationIds),
+              isNull(medicationSchedules.deletedAt),
+            ),
+          )
+          .orderBy(asc(medicationSchedules.timeOfDay))
+          .all()
+      ).filter(
+        (schedule) =>
+          schedule.daysOfWeek.includes(weekday)
+          // Ongoing schedules (no startDate) are always active; dated
+          // treatments only count while occurrenceDate is within them —
+          // once a treatment's endDate passes it just stops showing up
+          // here (see `db/schema.ts`'s comment on the treatment columns).
+          && (!schedule.startDate || (occurrenceDate >= schedule.startDate! && occurrenceDate <= schedule.endDate!)),
+      );
+      if (todaySchedules.length === 0) {
+        return [];
+      }
+
+      const scheduleIds = todaySchedules.map((schedule) => schedule.id);
+      const existingDoses = await this.db
+        .select()
+        .from(medicationDoses)
+        .where(
+          and(
+            inArray(medicationDoses.scheduleId, scheduleIds),
+            eq(medicationDoses.occurrenceDate, occurrenceDate),
+          ),
+        )
+        .all();
+      const doseBySchedule = new Map(existingDoses.map((dose) => [dose.scheduleId, dose]));
+
+      return todaySchedules.map((schedule) => {
+        const medication = medicationById.get(schedule.medicationId)!;
+        const dose = doseBySchedule.get(schedule.id);
+        return {
+          scheduleId: schedule.id,
+          medicationId: medication.id,
+          medicationName: medication.name,
+          dosage: medication.dosage,
+          timeOfDay: schedule.timeOfDay,
+          quantity: schedule.quantity,
+          occurrenceDate,
+          scheduledAt: scheduledInstant(occurrenceDate, schedule.timeOfDay),
+          takenAt: dose?.takenAt ?? null,
+        };
+      });
+    });
+  }
+
+  async upsertPushSubscription(
+    context: AuthenticatedUserContext,
+    input: PushSubscriptionInput,
+  ) {
+    return safely(async () => {
+      this.validateAuthenticatedContext(context);
+      const values = validatePushSubscriptionInput(input);
+      const now = this.now();
+
+      await this.db
+        .insert(pushSubscriptions)
+        .values({
+          id: this.createId(),
+          userId: context.userId,
+          ...values,
+          createdAt: now,
+          lastSeenAt: now,
+        })
+        .onConflictDoUpdate({
+          target: pushSubscriptions.endpoint,
+          set: {
+            userId: context.userId,
+            p256dh: values.p256dh,
+            authKey: values.authKey,
+            userAgent: values.userAgent,
+            lastSeenAt: now,
+            lastFailureAt: null,
+            failureCount: 0,
+          },
+        });
+    });
+  }
+
+  async deletePushSubscription(context: AuthenticatedUserContext, endpoint: string) {
+    return safely(async () => {
+      this.validateAuthenticatedContext(context);
+      this.validateIdentifier(endpoint);
+      await this.db
+        .delete(pushSubscriptions)
+        .where(
+          and(
+            eq(pushSubscriptions.endpoint, endpoint),
+            eq(pushSubscriptions.userId, context.userId),
+          ),
+        );
+    });
+  }
+
   private auditQuery({
     context,
     action,
@@ -1148,6 +1532,45 @@ export class FamilyCareDataService {
       throw new FamilyCareDataError("NOT_FOUND");
     }
     return medication;
+  }
+
+  private async requireSchedule(
+    context: AuthorizedFamilyContext,
+    scheduleId: string,
+  ): Promise<MedicationScheduleRow> {
+    this.validateIdentifier(scheduleId);
+    const schedule = await this.db
+      .select()
+      .from(medicationSchedules)
+      .where(
+        and(
+          eq(medicationSchedules.familyId, context.familyId),
+          eq(medicationSchedules.id, scheduleId),
+          isNull(medicationSchedules.deletedAt),
+        ),
+      )
+      .get();
+    if (!schedule) {
+      throw new FamilyCareDataError("NOT_FOUND");
+    }
+    return schedule;
+  }
+
+  private async requireDose(scheduleId: string, occurrenceDate: string) {
+    const dose = await this.db
+      .select()
+      .from(medicationDoses)
+      .where(
+        and(
+          eq(medicationDoses.scheduleId, scheduleId),
+          eq(medicationDoses.occurrenceDate, occurrenceDate),
+        ),
+      )
+      .get();
+    if (!dose) {
+      throw new FamilyCareDataError("NOT_FOUND");
+    }
+    return dose;
   }
 
   private requireChange(result: { meta: { changes: number } }) {

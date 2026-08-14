@@ -55,3 +55,39 @@ export type CreateInvitationInput = {
   emailNormalized: string;
   role: Exclude<FamilyRole, "admin">;
 };
+
+export type MedicationScheduleInput = {
+  /** "HH:MM", 24h clock. */
+  timeOfDay: string;
+  /** ISO weekday numbers, 1=segunda..7=domingo. Defaults to every day. */
+  daysOfWeek?: number[];
+  quantity?: number;
+  position?: number;
+  /**
+   * A dated treatment ("10 dias de amoxicilina") vs. an ongoing/indefinite
+   * one (e.g. daily blood pressure medication, the default): pass both
+   * `startDate` ("YYYY-MM-DD") and `durationDays`, or neither — one
+   * without the other is rejected by `validateScheduleInput`. `endDate` is
+   * never accepted as input; it's always derived from these two.
+   */
+  startDate?: string;
+  durationDays?: number;
+};
+
+export type UpdateMedicationScheduleInput = MedicationScheduleInput & {
+  expectedVersion: number;
+};
+
+export type LogDoseInput = {
+  /** "YYYY-MM-DD", the local calendar day this occurrence belongs to. */
+  occurrenceDate: string;
+  takenAt?: number;
+  notes?: string;
+};
+
+export type PushSubscriptionInput = {
+  endpoint: string;
+  p256dh: string;
+  authKey: string;
+  userAgent?: string;
+};

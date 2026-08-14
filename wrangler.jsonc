@@ -19,5 +19,12 @@
   "ai": {
     "binding": "AI",
     "remote": true
+  },
+  // Sweeps due medication schedules and sends Web Push reminders (see the
+  // `scheduled` handler in worker/index.ts). Runs every 5 minutes; the
+  // sweep itself no-ops if VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT
+  // secrets aren't configured (`wrangler secret put`).
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   }
 }

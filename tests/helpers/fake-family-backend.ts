@@ -25,6 +25,19 @@ type StoredMedication = {
   frequency: number | null;
   schedules: string[];
   legacySchedule: string | null;
+  doseSchedules: StoredDoseSchedule[];
+};
+
+/** A `medication_schedules` row stand-in — unrelated to the legacy `schedules`/`schedule` free-text fields above, despite the similar name. */
+type StoredDoseSchedule = {
+  id: string;
+  version: number;
+  timeOfDay: string;
+  daysOfWeek: number[];
+  quantity: number;
+  startDate: string | null;
+  durationDays: number | null;
+  endDate: string | null;
 };
 
 type StoredRelative = {
@@ -117,11 +130,59 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
       frequency: medication.frequency ?? null,
       schedules: medication.schedules ?? [],
       legacySchedule: medication.schedule ?? null,
+      doseSchedules: [],
     };
   }
 
   function findRelative(id: string) {
     return relatives.find((relative) => relative.id === id);
+  }
+
+  function findMedication(relativeId: string, medicationId: string) {
+    const relative = findRelative(relativeId);
+    return relative?.medications.find((item) => item.id === medicationId);
+  }
+
+  function findDoseSchedule(scheduleId: string) {
+    for (const relative of relatives) {
+      for (const medication of relative.medications) {
+        const schedule = medication.doseSchedules.find((item) => item.id === scheduleId);
+        if (schedule) return { relative, medication, schedule };
+      }
+    }
+    return undefined;
+  }
+
+  // scheduleId -> occurrenceDate -> takenAt. Doesn't filter by weekday like
+  // the real `listTodayDoses` does — every schedule is treated as due
+  // "today", which is enough to exercise the mark-as-taken wire flow
+  // without needing tests to align with the current real-world weekday.
+  const takenDoses = new Map<string, number>();
+  const todayOccurrenceDate = () => new Date().toISOString().slice(0, 10);
+  const doseKey = (scheduleId: string, occurrenceDate: string) => `${scheduleId}:${occurrenceDate}`;
+
+  function addDaysToDate(dateString: string, days: number): string {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  /** Both `startDate`/`durationDays` present, or neither — mirrors `validateScheduleInput`. */
+  function toTreatmentWindow(body: { startDate?: string; durationDays?: number }) {
+    if (body.startDate == null || body.durationDays == null) {
+      return { startDate: null, durationDays: null, endDate: null };
+    }
+    return {
+      startDate: body.startDate,
+      durationDays: body.durationDays,
+      endDate: addDaysToDate(body.startDate, body.durationDays - 1),
+    };
+  }
+
+  function isWithinTreatmentWindow(schedule: StoredDoseSchedule, occurrenceDate: string): boolean {
+    if (!schedule.startDate || !schedule.endDate) return true;
+    return occurrenceDate >= schedule.startDate && occurrenceDate <= schedule.endDate;
   }
 
   async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -222,6 +283,7 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
         frequency: body.frequency ?? null,
         schedules: body.schedules ?? [],
         legacySchedule: body.legacySchedule ?? null,
+        doseSchedules: [],
       };
       relative.medications.push(created);
       return jsonResponse({ medication: created }, 201);
@@ -255,6 +317,103 @@ export function createFakeFamilyBackend(seedRelatives: readonly Relative[] = [])
         relative.medications.splice(relative.medications.indexOf(medication), 1);
         return new Response(null, { status: 204 });
       }
+    }
+
+    const schedulesMatch = path.match(
+      new RegExp(`^/api/families/${FAMILY_ID}/relatives/([^/]+)/medications/([^/]+)/schedules$`),
+    );
+    if (schedulesMatch) {
+      const medication = findMedication(schedulesMatch[1], schedulesMatch[2]);
+      if (!medication) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+
+      if (method === "GET") return jsonResponse({ schedules: medication.doseSchedules });
+
+      if (method === "POST") {
+        const created: StoredDoseSchedule = {
+          id: `schedule-${nextId++}`,
+          version: 1,
+          timeOfDay: body.timeOfDay ?? "08:00",
+          daysOfWeek: body.daysOfWeek ?? [1, 2, 3, 4, 5, 6, 7],
+          quantity: body.quantity ?? 1,
+          ...toTreatmentWindow(body),
+        };
+        medication.doseSchedules.push(created);
+        return jsonResponse({ schedule: created }, 201);
+      }
+    }
+
+    const scheduleMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/relatives/[^/]+/medications/[^/]+/schedules/([^/]+)$`));
+    if (scheduleMatch) {
+      const found = findDoseSchedule(scheduleMatch[1]);
+      if (!found) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      const { medication, schedule } = found;
+
+      if (method === "PATCH") {
+        if (body.expectedVersion !== schedule.version) return errorResponse("Conflito de versão.", 409, "CONFLICT");
+        Object.assign(schedule, {
+          timeOfDay: body.timeOfDay ?? schedule.timeOfDay,
+          daysOfWeek: body.daysOfWeek ?? schedule.daysOfWeek,
+          quantity: body.quantity ?? schedule.quantity,
+          version: schedule.version + 1,
+          ...toTreatmentWindow(body),
+        });
+        return jsonResponse({ schedule });
+      }
+
+      if (method === "DELETE") {
+        const expectedVersion = Number(url.searchParams.get("expectedVersion"));
+        if (expectedVersion !== schedule.version) return errorResponse("Conflito de versão.", 409, "CONFLICT");
+        medication.doseSchedules.splice(medication.doseSchedules.indexOf(schedule), 1);
+        return new Response(null, { status: 204 });
+      }
+    }
+
+    const doseMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/relatives/[^/]+/medications/[^/]+/schedules/([^/]+)/doses$`));
+    if (doseMatch && method === "POST") {
+      const found = findDoseSchedule(doseMatch[1]);
+      if (!found) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      const occurrenceDate = body.occurrenceDate ?? todayOccurrenceDate();
+      const takenAt = body.takenAt ?? Date.now();
+      takenDoses.set(doseKey(found.schedule.id, occurrenceDate), takenAt);
+      return jsonResponse({ dose: { scheduleId: found.schedule.id, occurrenceDate, takenAt } }, 201);
+    }
+    if (doseMatch && method === "DELETE") {
+      const found = findDoseSchedule(doseMatch[1]);
+      if (!found) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      const occurrenceDate = url.searchParams.get("occurrenceDate") ?? todayOccurrenceDate();
+      takenDoses.delete(doseKey(found.schedule.id, occurrenceDate));
+      return jsonResponse({ dose: { scheduleId: found.schedule.id, occurrenceDate, takenAt: null } });
+    }
+
+    const todayDosesMatch = path.match(new RegExp(`^/api/families/${FAMILY_ID}/relatives/([^/]+)/doses$`));
+    if (todayDosesMatch && method === "GET") {
+      const relative = findRelative(todayDosesMatch[1]);
+      if (!relative) return errorResponse("Não encontrado.", 404, "NOT_FOUND");
+      const occurrenceDate = todayOccurrenceDate();
+      const doses = relative.medications.flatMap((medication) =>
+        medication.doseSchedules
+          .filter((schedule) => isWithinTreatmentWindow(schedule, occurrenceDate))
+          .map((schedule) => ({
+            scheduleId: schedule.id,
+            medicationId: medication.id,
+            medicationName: medication.name,
+            dosage: medication.dosage,
+            timeOfDay: schedule.timeOfDay,
+            quantity: schedule.quantity,
+            occurrenceDate,
+            scheduledAt: Date.now(),
+            takenAt: takenDoses.get(doseKey(schedule.id, occurrenceDate)) ?? null,
+          })),
+      );
+      return jsonResponse({ doses });
+    }
+
+    if (path === "/api/push/public-key" && method === "GET") {
+      return jsonResponse({ publicKey: "fake-vapid-public-key" });
+    }
+
+    if (path === "/api/push/subscribe" && (method === "POST" || method === "DELETE")) {
+      return new Response(null, { status: 204 });
     }
 
     if (path === `/api/families/${FAMILY_ID}/members` && method === "GET") {

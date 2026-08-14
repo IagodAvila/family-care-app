@@ -252,7 +252,14 @@ describe("fluxos críticos do FamilyCare", () => {
     await user.type(textarea, "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias.");
     await user.click(within(dialog).getByRole("button", { name: "Sugerir preenchimento com IA" }));
 
-    expect(await within(dialog).findByText(/Sugestões aplicadas/)).toBeTruthy();
+    // Targets the `role="status"` live region directly instead of
+    // `findByText(/regex/)` — the exact "Sugestões aplicadas em ..." string
+    // includes the AI's own field list (`appliedTo.join(", ")`), so a
+    // regex anchored to just the prefix intermittently failed to match the
+    // full element depending on how the text happened to be queried. The
+    // note is the only `role="status"` region in this form either way.
+    const assistNote = await within(dialog).findByRole("status");
+    expect(assistNote.textContent).toMatch(/Sugestões aplicadas/);
     expect(within(dialog).getByText("Losartana")).toBeTruthy();
 
     const conditionsInput = within(dialog).getByLabelText("Comorbidades, separadas por vírgula") as HTMLInputElement;
@@ -375,6 +382,146 @@ describe("fluxos críticos do FamilyCare", () => {
     await waitFor(() => {
       expect(screen.queryByText("Losartana")).toBeNull();
     });
+  });
+
+  test("cadastra um horário para um medicamento e remove em seguida", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    // Scoped to the medication row: adding a horário now also refreshes the
+    // "Hoje" section live (see SCHEDULES_CHANGED_EVENT in today-doses.tsx),
+    // which renders its own separate "08:00" elsewhere on the page.
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
+
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("Todos os dias")).toBeTruthy();
+    expect(within(medicationItem).getByText("1x")).toBeTruthy();
+
+    await user.click(within(medicationItem).getByRole("button", { name: "Remover horário das 08:00" }));
+    expect(await within(medicationItem).findByText("Nenhum horário cadastrado.")).toBeTruthy();
+  });
+
+  test("mostra os horários definidos mesmo com o painel de horários fechado", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
+
+    await user.click(within(medicationItem).getByRole("button", { name: "Horários" })); // fecha o painel
+    expect(within(medicationItem).queryByText("Todos os dias")).toBeNull(); // detalhe do painel some
+    expect(within(medicationItem).getByText("08:00")).toBeTruthy(); // resumo continua visível
+  });
+
+  test("a seção Hoje aparece sozinha ao cadastrar um horário, sem precisar recarregar a página", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Losartana", dosage: "50 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Losartana");
+    expect(screen.queryByText("Hoje")).toBeNull(); // nada cadastrado ainda
+
+    const medicationItem = screen.getByText("Losartana").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(await within(medicationItem).findByRole("button", { name: "Adicionar horário" }));
+
+    // SCHEDULES_CHANGED_EVENT dispara o refresh da seção Hoje — sem clicar em nada além do formulário de horário.
+    expect(await screen.findByText("Hoje")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Marcar como tomado" })).toBeTruthy();
+  });
+
+  test("repete o horário a cada X horas, gerando vários horários de uma vez", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Amoxicilina", dosage: "500 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Amoxicilina");
+    const medicationItem = screen.getByText("Amoxicilina").closest(".medication-list-item") as HTMLElement;
+    await user.click(await within(medicationItem).findByRole("button", { name: "Horários" }));
+    await user.click(within(medicationItem).getByRole("button", { name: "Repetir a cada X horas" }));
+
+    // Padrão: início 08:00, a cada 8 horas -> 08:00, 16:00, 00:00.
+    expect(within(medicationItem).getByText("Horários: 08:00, 16:00, 00:00")).toBeTruthy();
+
+    await user.click(within(medicationItem).getByRole("button", { name: "Adicionar horário" }));
+
+    expect(await within(medicationItem).findByText("08:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("16:00")).toBeTruthy();
+    expect(within(medicationItem).getByText("00:00")).toBeTruthy();
+  });
+
+  test("cadastra um tratamento com duração definida e mostra a data de término calculada", async () => {
+    await renderApp([storedRelative({
+      medications: [{ name: "Amoxicilina", dosage: "500 mg" }],
+    })]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Amoxicilina");
+    await user.click(await screen.findByRole("button", { name: "Horários" }));
+    await user.click(screen.getByRole("button", { name: "Definir duração do tratamento" }));
+
+    fireEvent.change(
+      screen.getByLabelText("Início do tratamento com Amoxicilina"),
+      { target: { value: "2027-01-15" } },
+    );
+    const durationInput = screen.getByLabelText("Duração do tratamento, em dias");
+    await user.clear(durationInput);
+    await user.type(durationInput, "10");
+
+    expect(await screen.findByText("Termina em 24/01/2027")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Adicionar horário" }));
+
+    expect(await screen.findByText("15/01/2027 – 24/01/2027")).toBeTruthy();
+  });
+
+  test("marca uma dose de hoje como tomada", async () => {
+    const relative = storedRelative({
+      medications: [{ name: "Enalapril", dosage: "20 mg" }],
+    });
+    const backend = createFakeFamilyBackend([relative]);
+    // Seeds a dose schedule directly on the fake's stored medication object
+    // (mutating it in place, same object `getRelatives()` returns) — the
+    // "Hoje" section only shows occurrences from an existing schedule,
+    // and creating one through the UI first would be redundant with the
+    // "cadastra um horário" test above.
+    backend.getRelatives()[0].medications[0].doseSchedules.push({
+      id: "schedule-seed-1",
+      version: 1,
+      timeOfDay: "08:00",
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      quantity: 1,
+      startDate: null,
+      durationDays: null,
+      endDate: null,
+    });
+    vi.stubGlobal("fetch", backend.fetch);
+    render(<Home />);
+    await screen.findByLabelText("Navegação principal");
+    const user = userEvent.setup();
+
+    expect(await screen.findByText("Hoje")).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Marcar como tomado" }));
+
+    expect(await screen.findByText("Tomado")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Marcar como tomado" })).toBeNull();
+
+    await user.click(await screen.findByRole("button", { name: "Desmarcar" }));
+
+    expect(await screen.findByRole("button", { name: "Marcar como tomado" })).toBeTruthy();
+    expect(screen.queryByText("Tomado")).toBeNull();
   });
 
   test("edita familiar e substitui a lista de medicamentos existente", async () => {

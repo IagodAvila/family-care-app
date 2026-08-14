@@ -1,11 +1,15 @@
 import type {
   MedicationInput,
+  MedicationScheduleInput,
+  PushSubscriptionInput,
   RelativeInput,
   UpdateMedicationInput,
+  UpdateMedicationScheduleInput,
   UpdateRelativeInput,
 } from "./domain.ts";
 import { FamilyCareDataError } from "./errors.ts";
 import { familyRoles, type FamilyRole } from "./schema.ts";
+import { addDaysToDateString } from "./time.ts";
 
 function requireText(value: string, maximumLength: number): string {
   const normalized = value.trim();
@@ -144,4 +148,118 @@ export function validateEmail(value: string): string {
     throw new FamilyCareDataError("INVALID_INPUT");
   }
   return normalized;
+}
+
+const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+
+function daysOfWeek(values: number[] | undefined): number[] {
+  const normalized = values === undefined ? ALL_WEEKDAYS : values;
+  const unique = [...new Set(normalized)];
+  if (
+    unique.length === 0
+    || unique.length > 7
+    || unique.some((day) => !Number.isSafeInteger(day) || day < 1 || day > 7)
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return unique.sort((a, b) => a - b);
+}
+
+/** Rejects malformed AND calendar-invalid ("2024-02-30") dates; unlike `validateOccurrenceDate`, doesn't restrict past/future — a treatment can start any day. */
+function validateCalendarDate(value: string): string {
+  const normalized = requireText(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  const [year, month, day] = normalized.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return normalized;
+}
+
+const MAX_TREATMENT_DURATION_DAYS = 365;
+
+/**
+ * A dated treatment: both `startDate` and `durationDays` present, or
+ * neither (an ongoing schedule) — one without the other is rejected.
+ * `endDate` is always derived here, never accepted as input.
+ */
+function validateTreatmentDuration(
+  startDateInput: string | undefined,
+  durationDaysInput: number | undefined,
+): { startDate: string | null; durationDays: number | null; endDate: string | null } {
+  if (startDateInput === undefined && durationDaysInput === undefined) {
+    return { startDate: null, durationDays: null, endDate: null };
+  }
+  if (startDateInput === undefined || durationDaysInput === undefined) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  const startDate = validateCalendarDate(startDateInput);
+  if (
+    !Number.isSafeInteger(durationDaysInput)
+    || durationDaysInput < 1
+    || durationDaysInput > MAX_TREATMENT_DURATION_DAYS
+  ) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  return {
+    startDate,
+    durationDays: durationDaysInput,
+    endDate: addDaysToDateString(startDate, durationDaysInput - 1),
+  };
+}
+
+export function validateScheduleInput(
+  input: MedicationScheduleInput | UpdateMedicationScheduleInput,
+) {
+  const timeOfDay = requireText(input.timeOfDay, 5);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(timeOfDay)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  const quantity = input.quantity ?? 1;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+
+  const treatment = validateTreatmentDuration(input.startDate, input.durationDays);
+
+  return {
+    timeOfDay,
+    daysOfWeek: daysOfWeek(input.daysOfWeek),
+    quantity,
+    position: position(input.position),
+    ...treatment,
+  };
+}
+
+export function validateOccurrenceDate(value: string): string {
+  const normalized = requireText(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return normalized;
+}
+
+export function validatePushSubscriptionInput(input: PushSubscriptionInput) {
+  const endpoint = requireText(input.endpoint, 600);
+  if (!/^https:\/\//.test(endpoint)) {
+    throw new FamilyCareDataError("INVALID_INPUT");
+  }
+  return {
+    endpoint,
+    p256dh: requireText(input.p256dh, 200),
+    authKey: requireText(input.authKey, 200),
+    userAgent: input.userAgent
+      ? optionalText(input.userAgent, 300)
+      : null,
+  };
 }

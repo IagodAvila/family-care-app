@@ -1,0 +1,427 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { CalendarDays, ChevronDown, Clock, Plus, Repeat, X } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { addDaysToDate } from "@/lib/family-data";
+import { formatDate, formatTime, WEEKDAY_LABELS } from "@/lib/family-format";
+import type { MedicationSchedule } from "@/types/family";
+import { SCHEDULES_CHANGED_EVENT } from "./today-doses";
+
+const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+const ICON_STROKE = 1.75;
+
+type DraftSchedule = {
+  timeOfDay: string;
+  daysOfWeek: number[];
+  quantity: number;
+  treatmentEnabled: boolean;
+  startDate: string;
+  durationDays: number;
+  intervalEnabled: boolean;
+  intervalHours: number;
+};
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createEmptyDraft(): DraftSchedule {
+  return {
+    timeOfDay: "08:00",
+    daysOfWeek: ALL_WEEKDAYS,
+    quantity: 1,
+    treatmentEnabled: false,
+    startDate: todayIsoDate(),
+    durationDays: 10,
+    intervalEnabled: false,
+    intervalHours: 8,
+  };
+}
+
+/**
+ * "A cada X horas a partir de HH:MM" (how prescriptions are usually
+ * phrased) -> the individual clock times that covers, e.g. 8h from 08:00
+ * -> ["08:00", "16:00", "00:00"]. Stops once a full day is covered rather
+ * than asking the user how many times/day — 24 doesn't always divide
+ * evenly (e.g. every 5h from 08:00 -> 08:00/13:00/18:00/23:00, 4 times,
+ * not 4.8), so this always takes as many whole intervals as fit in 24h.
+ */
+function computeIntervalTimes(startTime: string, intervalHours: number): string[] {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const startTotalMinutes = startHour * 60 + startMinute;
+  const intervalMinutes = intervalHours * 60;
+  const occurrences = Math.max(1, Math.floor((24 * 60) / intervalMinutes));
+
+  const times: string[] = [];
+  for (let index = 0; index < occurrences; index++) {
+    const totalMinutes = (startTotalMinutes + index * intervalMinutes) % (24 * 60);
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+  }
+  return times;
+}
+
+type MedicationSchedulesProps = {
+  familyId: string;
+  relativeId: string;
+  medicationId: string;
+  medicationName: string;
+  readOnly: boolean;
+};
+
+/**
+ * Collapsible "Horários" panel for a single (already persisted) medication.
+ * Schedules can only be attached to a real `medicationId` (the DB FK
+ * requires one), so this lives on the read/detail side rather than the
+ * relative-form's in-memory medication drafts, which don't have a server id
+ * until the relative itself is saved.
+ */
+export function MedicationSchedules({
+  familyId,
+  relativeId,
+  medicationId,
+  medicationName,
+  readOnly,
+}: MedicationSchedulesProps) {
+  const [open, setOpen] = useState(false);
+  const [schedules, setSchedules] = useState<MedicationSchedule[] | null>(null);
+  const [draft, setDraft] = useState<DraftSchedule>(createEmptyDraft);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const basePath = `/api/families/${familyId}/relatives/${relativeId}/medications/${medicationId}/schedules`;
+
+  // Fetched on mount (not gated by `open`) so the compact summary below the
+  // toggle button — the horários and treatment deadline, at a glance — is
+  // visible even with the full panel collapsed.
+  useEffect(() => {
+    let cancelled = false;
+    api(basePath)
+      .then((data) => {
+        if (!cancelled) setSchedules(data.schedules);
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : "Não foi possível carregar os horários.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [basePath]);
+
+  function toggleDay(day: number) {
+    setDraft((current) => ({
+      ...current,
+      daysOfWeek: current.daysOfWeek.includes(day)
+        ? current.daysOfWeek.filter((item) => item !== day)
+        : [...current.daysOfWeek, day].sort((a, b) => a - b),
+    }));
+  }
+
+  async function addSchedule(event: React.FormEvent) {
+    event.preventDefault();
+    if (draft.daysOfWeek.length === 0) {
+      setError("Selecione ao menos um dia da semana.");
+      return;
+    }
+    if (draft.treatmentEnabled && !draft.startDate) {
+      setError("Informe a data de início do tratamento.");
+      return;
+    }
+    if (!Number.isSafeInteger(draft.quantity) || draft.quantity < 1) {
+      setError("Informe uma quantidade válida.");
+      return;
+    }
+    if (draft.treatmentEnabled && (!Number.isSafeInteger(draft.durationDays) || draft.durationDays < 1)) {
+      setError("Informe uma duração válida, em dias.");
+      return;
+    }
+    if (draft.intervalEnabled && (!Number.isSafeInteger(draft.intervalHours) || draft.intervalHours < 1 || draft.intervalHours > 24)) {
+      setError("Informe de quantas em quantas horas, entre 1 e 24.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      // "De 8 em 8 horas" isn't one schedule row — it's every clock time
+      // that interval covers in a day, each created the same way a single
+      // manually-typed horário would be (same days/quantity/treatment
+      // window on all of them).
+      const times = draft.intervalEnabled
+        ? computeIntervalTimes(draft.timeOfDay, draft.intervalHours)
+        : [draft.timeOfDay];
+
+      const createdSchedules: MedicationSchedule[] = [];
+      for (const timeOfDay of times) {
+        const payload = {
+          timeOfDay,
+          daysOfWeek: draft.daysOfWeek,
+          quantity: draft.quantity,
+          ...(draft.treatmentEnabled
+            ? { startDate: draft.startDate, durationDays: draft.durationDays }
+            : {}),
+        };
+        const created = await api(basePath, { method: "POST", body: JSON.stringify(payload) });
+        createdSchedules.push(created.schedule);
+      }
+
+      setSchedules((current) => [...(current ?? []), ...createdSchedules]);
+      setDraft(createEmptyDraft());
+      // Lets the "Hoje" section (a sibling component, not a parent/child of
+      // this one) pick up the new schedule right away instead of waiting
+      // for its next poll — see today-doses.tsx.
+      window.dispatchEvent(new Event(SCHEDULES_CHANGED_EVENT));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível salvar o horário.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSchedule(schedule: MedicationSchedule) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`${basePath}/${schedule.id}?expectedVersion=${schedule.version}`, { method: "DELETE" });
+      setSchedules((current) => (current ?? []).filter((item) => item.id !== schedule.id));
+      window.dispatchEvent(new Event(SCHEDULES_CHANGED_EVENT));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível remover o horário.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const today = todayIsoDate();
+
+  return (
+    <div className="medication-schedules">
+      <button
+        type="button"
+        className="medication-schedules-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Clock aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+        Horários
+        <ChevronDown aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+      </button>
+
+      {!open && schedules && schedules.length > 0 && (
+        <ul className="medication-schedules-summary">
+          {schedules.map((schedule) => {
+            const ended = Boolean(schedule.endDate && schedule.endDate < today);
+            return (
+              <li key={schedule.id} className={ended ? "ended" : undefined}>
+                {formatTime(schedule.timeOfDay)}
+                {schedule.endDate && (
+                  <span className="medication-schedules-summary-deadline">
+                    {ended ? "encerrado" : `até ${formatDate(schedule.endDate)}`}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {open && (
+        <div className="medication-schedules-panel">
+          {error && <p className="medication-schedules-error">{error}</p>}
+
+          {schedules === null ? (
+            <p className="medication-schedules-loading">Carregando horários…</p>
+          ) : schedules.length === 0 ? (
+            <p className="medication-schedules-empty">Nenhum horário cadastrado.</p>
+          ) : (
+            <ul className="medication-schedules-list">
+              {schedules.map((schedule) => {
+                const ended = Boolean(schedule.endDate && schedule.endDate < today);
+                return (
+                  <li key={schedule.id}>
+                    <span className="medication-schedules-time">{formatTime(schedule.timeOfDay)}</span>
+                    <span className="medication-schedules-days">
+                      {schedule.daysOfWeek.length === 7
+                        ? "Todos os dias"
+                        : schedule.daysOfWeek.map((day) => WEEKDAY_LABELS[day]).join(", ")}
+                      {schedule.startDate && schedule.endDate && (
+                        <small className="medication-schedules-treatment-range">
+                          {formatDate(schedule.startDate)} – {formatDate(schedule.endDate)}
+                          {ended && <span className="medication-schedules-ended">Encerrado</span>}
+                        </small>
+                      )}
+                    </span>
+                    <span className="medication-schedules-quantity" title="Quantidade por dose, neste horário">
+                      {schedule.quantity}x
+                    </span>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        aria-label={`Remover horário das ${formatTime(schedule.timeOfDay)}`}
+                        disabled={busy}
+                        onClick={() => removeSchedule(schedule)}
+                      >
+                        <X aria-hidden="true" size={13} strokeWidth={ICON_STROKE} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {!readOnly && (
+            <form className="medication-schedules-form" onSubmit={addSchedule}>
+              <label>
+                {draft.intervalEnabled ? "Primeiro horário" : "Horário"}
+                <input
+                  type="time"
+                  value={draft.timeOfDay}
+                  onChange={(event) => setDraft((current) => ({ ...current, timeOfDay: event.target.value }))}
+                  aria-label={`Horário para ${medicationName}`}
+                  required
+                />
+              </label>
+              <label>
+                Comprimidos por dose
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  // Deliberately not `Number(value) || 1`: that fallback fires
+                  // on every keystroke, including the momentarily-empty value
+                  // while clearing the field to type a new number, which
+                  // fights the user by snapping back to 1 before they can
+                  // finish typing. `valueAsNumber` is NaN for "" or invalid
+                  // input — a controlled number input renders NaN as empty,
+                  // so the field can be cleared normally; validity is
+                  // enforced on submit instead (see `addSchedule`).
+                  value={Number.isNaN(draft.quantity) ? "" : draft.quantity}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, quantity: event.target.valueAsNumber }))
+                  }
+                  aria-label={`Quantidade para ${medicationName}`}
+                />
+              </label>
+              <div className="medication-schedules-weekdays" role="group" aria-label="Dias da semana">
+                {ALL_WEEKDAYS.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className={draft.daysOfWeek.includes(day) ? "active" : undefined}
+                    onClick={() => toggleDay(day)}
+                    aria-pressed={draft.daysOfWeek.includes(day)}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </button>
+                ))}
+              </div>
+
+              {draft.intervalEnabled ? (
+                <div className="medication-schedules-treatment">
+                  <label>
+                    A cada quantas horas
+                    <span className="medication-schedules-treatment-days">
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={Number.isNaN(draft.intervalHours) ? "" : draft.intervalHours}
+                        onChange={(event) =>
+                          setDraft((current) => ({ ...current, intervalHours: event.target.valueAsNumber }))
+                        }
+                        aria-label="De quantas em quantas horas tomar"
+                      />
+                      horas
+                    </span>
+                  </label>
+                  {draft.timeOfDay && Number.isSafeInteger(draft.intervalHours) && draft.intervalHours > 0 && draft.intervalHours <= 24 && (
+                    <span className="medication-schedules-treatment-end">
+                      Horários: {computeIntervalTimes(draft.timeOfDay, draft.intervalHours).map(formatTime).join(", ")}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="medication-schedules-treatment-remove"
+                    onClick={() => setDraft((current) => ({ ...current, intervalEnabled: false }))}
+                  >
+                    Remover repetição
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="medication-schedules-treatment-link"
+                  onClick={() => setDraft((current) => ({ ...current, intervalEnabled: true }))}
+                >
+                  <Repeat aria-hidden="true" size={12} strokeWidth={ICON_STROKE} />
+                  Repetir a cada X horas
+                </button>
+              )}
+
+              {draft.treatmentEnabled ? (
+                <div className="medication-schedules-treatment">
+                  <label>
+                    Início
+                    <input
+                      type="date"
+                      value={draft.startDate}
+                      onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
+                      aria-label={`Início do tratamento com ${medicationName}`}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Duração
+                    <span className="medication-schedules-treatment-days">
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={Number.isNaN(draft.durationDays) ? "" : draft.durationDays}
+                        onChange={(event) =>
+                          setDraft((current) => ({ ...current, durationDays: event.target.valueAsNumber }))
+                        }
+                        aria-label="Duração do tratamento, em dias"
+                      />
+                      dias
+                    </span>
+                  </label>
+                  {draft.startDate && Number.isSafeInteger(draft.durationDays) && draft.durationDays > 0 && (
+                    <span className="medication-schedules-treatment-end">
+                      Termina em {formatDate(addDaysToDate(draft.startDate, draft.durationDays - 1))}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="medication-schedules-treatment-remove"
+                    onClick={() => setDraft((current) => ({ ...current, treatmentEnabled: false }))}
+                  >
+                    Remover duração
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="medication-schedules-treatment-link"
+                  onClick={() => setDraft((current) => ({ ...current, treatmentEnabled: true }))}
+                >
+                  <CalendarDays aria-hidden="true" size={12} strokeWidth={ICON_STROKE} />
+                  Definir duração do tratamento
+                </button>
+              )}
+
+              <button type="submit" className="medication-schedules-add" disabled={busy}>
+                <Plus aria-hidden="true" size={14} strokeWidth={ICON_STROKE} />
+                Adicionar horário
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

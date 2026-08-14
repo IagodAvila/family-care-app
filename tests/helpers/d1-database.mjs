@@ -28,6 +28,27 @@ class LocalD1PreparedStatement {
     };
   }
 
+  /**
+   * drizzle-orm's D1 session calls `.raw()` (not `.all()`) whenever a query
+   * has an explicit `fields` selection — e.g. any multi-table join with
+   * `.select({...})` — and maps the result back to those fields *by column
+   * position*, not by name (see `mapResultRow` in drizzle-orm's d1/session).
+   *
+   * `node:sqlite`'s `StatementSync` has no positional/array output mode in
+   * the Node version this project targets (`.nvmrc`) — `setReturnArrays`
+   * only exists in newer Node builds, so relying on it here breaks CI
+   * (pinned via `.nvmrc`) even though it works locally on a newer Node.
+   * `Object.values(row)` on `.all()`'s plain-object rows is positionally
+   * correct too, *as long as every selected column has a unique name* —
+   * callers that join same-named columns from different tables (e.g.
+   * `medications.id` and `relatives.id`) must alias them explicitly with
+   * `sql\`${col}\`.as("alias")` (plain `.select({ key: col })` does NOT
+   * emit a SQL-level alias — see db/queries/reminders.ts for the pattern).
+   * Without a real SQL alias, `.all()`'s row object would silently
+   * collapse the duplicate key, and `Object.values()` would just be
+   * positionally wrong instead of erroring — there's no way to detect
+   * that case here, so it's on the caller to alias everything.
+   */
   async raw() {
     const { results } = await this.all();
     return results.map((row) => Object.values(row));
