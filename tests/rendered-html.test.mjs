@@ -217,6 +217,19 @@ test("ships production metadata without starter artifacts", async () => {
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Building your site/i);
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/i);
+
+  // PWA: sem estas tags no HTML servido, o navegador não considera o app
+  // instalável, por mais completo que o manifest esteja. As URLs saem
+  // absolutas porque o layout define `metadataBase`.
+  assert.match(html, /<link rel="manifest" href="[^"]*\/manifest\.webmanifest"/i);
+  assert.match(html, /<link rel="apple-touch-icon" href="[^"]*\/icons\/apple-touch-icon\.png"/i);
+  assert.match(html, /<meta name="mobile-web-app-capable" content="yes"/i);
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes"/i);
+  assert.match(html, /<meta name="theme-color" content="#1f7773"/i);
+  // "black-translucent" faria a barra de status do iOS cobrir o conteúdo, e
+  // o shim de viewport do vinext não emite `viewport-fit=cover` pra
+  // compensar com safe-area — ver o comentário em app/layout.tsx.
+  assert.doesNotMatch(html, /apple-mobile-web-app-status-bar-style" content="black-translucent"/i);
   assert.doesNotMatch(page, /fixture-[1-8]|Medicamento fictício/i);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/i);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/i);
