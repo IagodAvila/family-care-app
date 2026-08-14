@@ -239,6 +239,13 @@ export function MedicalRecord({
         </section>
       </div>
 
+      {selected.notes && (
+        <section className="notes">
+          <strong>Observação importante</strong>
+          <p>{selected.notes}</p>
+        </section>
+      )}
+
       <section className="medications-section">
         <div className="section-heading">
           <h3>{emergencyMode ? "Medicamentos em uso" : "Medicamentos"}</h3>
@@ -301,13 +308,11 @@ export function MedicalRecord({
         )}
       </section>
 
-      {familyId && <TodayDoses key={selected.id} familyId={familyId} relativeId={selected.id} />}
-
-      {selected.notes && (
-        <section className="notes">
-          <strong>Observação importante</strong>
-          <p>{selected.notes}</p>
-        </section>
+      {/* Emergency mode is meant to be a fast, no-frills read of the
+          medication list for a first responder — the time-boxed "Hoje"
+          breakdown is the opposite of that, so it's hidden while active. */}
+      {familyId && !emergencyMode && (
+        <TodayDoses key={selected.id} familyId={familyId} relativeId={selected.id} />
       )}
     </article>
   );

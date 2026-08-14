@@ -30,7 +30,14 @@ export function AppHeader({
 
       <div className="topbar-actions">
         <ThemeToggle />
-        {user && <UserMenu user={user} onLogout={onLogout} />}
+        {user && (
+          <UserMenu
+            user={user}
+            onLogout={onLogout}
+            onOpenMembers={onOpenMembers}
+            onOpenPrivacy={onOpenPrivacy}
+          />
+        )}
       </div>
     </header>
   );

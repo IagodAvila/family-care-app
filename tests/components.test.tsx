@@ -93,6 +93,41 @@ async function renderApp(seedRelatives: readonly Relative[] = []) {
   return backend;
 }
 
+/**
+ * `renderApp` plus pre-seeded dose schedules, for the "Hoje" section — which
+ * only ever lists occurrences of an already-saved horário. Seeds them
+ * straight onto the fake's stored medication objects (mutating in place,
+ * the same objects `getRelatives()` returns) rather than clicking through
+ * the schedule form, which the dedicated schedule tests already cover.
+ */
+async function renderAppWithSchedule(
+  ...schedules: { timeOfDay: string; medicationName?: string }[]
+) {
+  const relative = storedRelative({
+    medications: schedules.map((schedule, index) => ({
+      name: schedule.medicationName ?? `Remédio ${index + 1}`,
+      dosage: "20 mg",
+    })),
+  });
+  const backend = createFakeFamilyBackend([relative]);
+  schedules.forEach((schedule, index) => {
+    backend.getRelatives()[0].medications[index].doseSchedules.push({
+      id: `schedule-seed-${index + 1}`,
+      version: 1,
+      timeOfDay: schedule.timeOfDay,
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      quantity: 1,
+      startDate: null,
+      durationDays: null,
+      endDate: null,
+    });
+  });
+  vi.stubGlobal("fetch", backend.fetch);
+  render(<Home />);
+  await screen.findByLabelText("Navegação principal");
+  return backend;
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
@@ -102,6 +137,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Undoes any `vi.setSystemTime` from the "Hoje" tests, whose behavior
+  // depends on the current stretch of the day.
+  vi.useRealTimers();
 });
 
 describe("Modal", () => {
@@ -248,16 +286,28 @@ describe("fluxos críticos do FamilyCare", () => {
       return realFetch(input, init);
     });
 
+    // `fireEvent.change` em vez de `user.type`: digitar os 62 caracteres um a
+    // um dispara 62 atualizações de estado, e o teste não é sobre a mecânica
+    // de digitação — é sobre o fluxo de sugestão. Menos corrida, mais rápido.
     const textarea = within(dialog).getByPlaceholderText(/pressão alta/);
-    await user.type(textarea, "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias.");
-    await user.click(within(dialog).getByRole("button", { name: "Sugerir preenchimento com IA" }));
+    fireEvent.change(textarea, {
+      target: { value: "Ela tem pressão alta e toma losartana 50mg à noite, sem alergias." },
+    });
 
-    // Targets the `role="status"` live region directly instead of
-    // `findByText(/regex/)` — the exact "Sugestões aplicadas em ..." string
-    // includes the AI's own field list (`appliedTo.join(", ")`), so a
-    // regex anchored to just the prefix intermittently failed to match the
-    // full element depending on how the text happened to be queried. The
-    // note is the only `role="status"` region in this form either way.
+    // O botão fica `disabled` enquanto o texto estiver vazio, e o userEvent
+    // clica em botão desabilitado sem reclamar — vira um no-op silencioso
+    // que só apareceria lá embaixo como "não achei o role=status", mascarando
+    // a causa. Esperar habilitar torna a pré-condição explícita.
+    const assistButton = within(dialog).getByRole("button", {
+      name: "Sugerir preenchimento com IA",
+    }) as HTMLButtonElement;
+    await waitFor(() => expect(assistButton.disabled).toBe(false));
+    await user.click(assistButton);
+
+    // Busca a região `role="status"` diretamente em vez de
+    // `findByText(/regex/)`: o texto completo inclui a lista de campos que a
+    // IA preencheu (`appliedTo.join(", ")`), e é a única região desse tipo
+    // no formulário.
     const assistNote = await within(dialog).findByRole("status");
     expect(assistNote.textContent).toMatch(/Sugestões aplicadas/);
     expect(within(dialog).getByText("Losartana")).toBeTruthy();
@@ -424,6 +474,9 @@ describe("fluxos críticos do FamilyCare", () => {
   });
 
   test("a seção Hoje aparece sozinha ao cadastrar um horário, sem precisar recarregar a página", async () => {
+    // O formulário sugere 08:00 por padrão; o relógio fica em 07:00 (mesma
+    // manhã) pra essa dose aparecer como próxima, e não como atrasada.
+    vi.setSystemTime(new Date("2026-08-14T07:00:00"));
     await renderApp([storedRelative({
       medications: [{ name: "Losartana", dosage: "50 mg" }],
     })]);
@@ -488,28 +541,12 @@ describe("fluxos críticos do FamilyCare", () => {
   });
 
   test("marca uma dose de hoje como tomada", async () => {
-    const relative = storedRelative({
-      medications: [{ name: "Enalapril", dosage: "20 mg" }],
-    });
-    const backend = createFakeFamilyBackend([relative]);
-    // Seeds a dose schedule directly on the fake's stored medication object
-    // (mutating it in place, same object `getRelatives()` returns) — the
-    // "Hoje" section only shows occurrences from an existing schedule,
-    // and creating one through the UI first would be redundant with the
-    // "cadastra um horário" test above.
-    backend.getRelatives()[0].medications[0].doseSchedules.push({
-      id: "schedule-seed-1",
-      version: 1,
-      timeOfDay: "08:00",
-      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
-      quantity: 1,
-      startDate: null,
-      durationDays: null,
-      endDate: null,
-    });
-    vi.stubGlobal("fetch", backend.fetch);
-    render(<Home />);
-    await screen.findByLabelText("Navegação principal");
+    // The "Hoje" list only shows the current stretch of the day by default,
+    // and flags past-due doses differently — both make this test
+    // time-of-day dependent, so the clock is pinned to mid-morning and the
+    // seeded dose sits later that same morning (visible, not yet overdue).
+    vi.setSystemTime(new Date("2026-08-14T09:00:00"));
+    await renderAppWithSchedule({ timeOfDay: "10:00" });
     const user = userEvent.setup();
 
     expect(await screen.findByText("Hoje")).toBeTruthy();
@@ -522,6 +559,39 @@ describe("fluxos críticos do FamilyCare", () => {
 
     expect(await screen.findByRole("button", { name: "Marcar como tomado" })).toBeTruthy();
     expect(screen.queryByText("Tomado")).toBeNull();
+  });
+
+  test("agrupa as doses por período do dia, mostrando só o período atual até pedir o dia todo", async () => {
+    vi.setSystemTime(new Date("2026-08-14T09:00:00")); // manhã
+    await renderAppWithSchedule(
+      { timeOfDay: "10:00", medicationName: "Enalapril" },
+      { timeOfDay: "20:00", medicationName: "Sinvastatina" },
+    );
+    const user = userEvent.setup();
+
+    const section = (await screen.findByText("Hoje")).closest("section") as HTMLElement;
+    expect(within(section).getByText("Manhã")).toBeTruthy();
+    expect(within(section).getByText("Enalapril")).toBeTruthy();
+    // A dose da noite não aparece enquanto a aba "Agora" (manhã) está ativa.
+    expect(within(section).queryByText("Sinvastatina")).toBeNull();
+
+    await user.click(within(section).getByRole("tab", { name: "Dia todo" }));
+
+    expect(within(section).getByText("Noite")).toBeTruthy();
+    expect(within(section).getByText("Sinvastatina")).toBeTruthy();
+    expect(within(section).getByText("Enalapril")).toBeTruthy();
+  });
+
+  test("destaca como atrasada a dose cujo horário já passou sem ser marcada", async () => {
+    vi.setSystemTime(new Date("2026-08-14T09:00:00"));
+    // 07:00 já passou (mesma manhã), então entra no grupo "Atrasados".
+    await renderAppWithSchedule({ timeOfDay: "07:00" });
+
+    const section = (await screen.findByText("Hoje")).closest("section") as HTMLElement;
+    expect(within(section).getByText("Atrasados")).toBeTruthy();
+    expect(
+      within(section).getByRole("button", { name: /Atrasado — marcar como tomado/ }),
+    ).toBeTruthy();
   });
 
   test("edita familiar e substitui a lista de medicamentos existente", async () => {
@@ -618,5 +688,19 @@ describe("Membros e convites", () => {
       expect(invitations).toHaveLength(1);
       expect(invitations[0]).toMatchObject({ emailNormalized: "convidado@example.com", role: "viewer" });
     });
+  });
+
+  test("abre Membros e Privacidade pelo menu da conta — o único caminho até eles que sobrevive no mobile, onde a navegação de topo fica escondida", async () => {
+    const user = userEvent.setup();
+    await renderApp([]);
+
+    await user.click(await screen.findByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitem", { name: "Membros" }));
+    const membersDialog = await screen.findByRole("dialog", { name: "Membros" });
+    await user.click(within(membersDialog).getByRole("button", { name: "Fechar" }));
+
+    await user.click(screen.getByRole("button", { name: "Menu da conta de Ana Teste" }));
+    await user.click(screen.getByRole("menuitem", { name: "Privacidade" }));
+    expect(await screen.findByRole("dialog", { name: /Seus dados ficam protegidos/ })).toBeTruthy();
   });
 });

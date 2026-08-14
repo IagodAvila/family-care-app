@@ -8,6 +8,8 @@ import { PushNotificationsToggle } from "./push-notifications-toggle";
 type UserMenuProps = {
   user: CurrentUser;
   onLogout: () => void;
+  onOpenMembers: () => void;
+  onOpenPrivacy: () => void;
 };
 
 /**
@@ -17,16 +19,16 @@ type UserMenuProps = {
  * could push past the edge of the screen on narrow devices. Follows the same
  * dismissable-popover pattern as the "more options" menu in medical-record.tsx.
  */
-export function UserMenu({ user, onLogout }: UserMenuProps) {
+export function UserMenu({ user, onLogout, onOpenMembers, onOpenPrivacy }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const logoutRef = useRef<HTMLButtonElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
   const label = user.displayName ?? user.emailNormalized;
 
   useEffect(() => {
     if (!open) return;
-    logoutRef.current?.focus();
+    firstItemRef.current?.focus();
 
     function closeMenu(event: MouseEvent | KeyboardEvent) {
       if (event instanceof KeyboardEvent && event.key === "Escape") {
@@ -51,6 +53,16 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
   function logout() {
     setOpen(false);
     onLogout();
+  }
+
+  function openMembers() {
+    setOpen(false);
+    onOpenMembers();
+  }
+
+  function openPrivacy() {
+    setOpen(false);
+    onOpenPrivacy();
   }
 
   return (
@@ -79,8 +91,24 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
             <strong>{user.displayName ?? "Minha conta"}</strong>
             <small>{user.emailNormalized}</small>
           </div>
+          {/* Only nav path to "Membros" on narrow screens — .desktop-nav
+              (where these links normally live) hides below 650px with no
+              other way to reach them. Kept here for wide screens too
+              instead of duplicating the show/hide logic. */}
+          <button
+            className="user-menu-item user-menu-item--toggle"
+            ref={firstItemRef}
+            type="button"
+            role="menuitem"
+            onClick={openMembers}
+          >
+            Membros
+          </button>
+          <button className="user-menu-item user-menu-item--toggle" type="button" role="menuitem" onClick={openPrivacy}>
+            Privacidade
+          </button>
           <PushNotificationsToggle />
-          <button className="user-menu-item" ref={logoutRef} type="button" role="menuitem" onClick={logout}>
+          <button className="user-menu-item" type="button" role="menuitem" onClick={logout}>
             Sair
           </button>
         </div>

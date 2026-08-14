@@ -44,6 +44,32 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   7: "Dom",
 };
 
+/** A day bucketed into four stretches, for grouping the "Hoje" dose list so it doesn't grow huge with many medications. */
+export type DayPeriod = "madrugada" | "manha" | "tarde" | "noite";
+
+/** Chronological order (not alphabetical/object-key order) for rendering period groups. */
+export const DAY_PERIODS: DayPeriod[] = ["manha", "tarde", "noite", "madrugada"];
+
+export const DAY_PERIOD_LABELS: Record<DayPeriod, string> = {
+  manha: "Manhã",
+  tarde: "Tarde",
+  noite: "Noite",
+  madrugada: "Madrugada",
+};
+
+/** hour (0-23, local clock) -> which stretch of the day it falls in. 6h-12h manhã, 12h-18h tarde, 18h-24h noite, 0h-6h madrugada. */
+export function getDayPeriod(hour: number): DayPeriod {
+  if (hour >= 6 && hour < 12) return "manha";
+  if (hour >= 12 && hour < 18) return "tarde";
+  if (hour >= 18) return "noite";
+  return "madrugada";
+}
+
+/** "08:00" -> the hour as a number, for bucketing a schedule's `timeOfDay` into a `DayPeriod`. */
+export function hourFromTime(timeOfDay: string): number {
+  return Number(String(timeOfDay ?? "").slice(0, 2)) || 0;
+}
+
 export function getMedicationTiming(medication: Medication) {
   const normalized = normalizeMedication(medication);
   return normalized.orientation || "Orientação de uso não informada";
